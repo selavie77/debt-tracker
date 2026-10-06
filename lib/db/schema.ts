@@ -189,6 +189,26 @@ export const income = pgTable(
   (t) => [index("income_owner_idx").on(t.ownerId), ownerOnly("income", t)],
 ).enableRLS();
 
+// ---- Phase 3: tax review tracking for settled debts ----
+
+export const taxItems = pgTable(
+  "tax_items",
+  {
+    id: pk(),
+    ownerId: owner(),
+    debtId: uuid("debt_id")
+      .notNull()
+      .unique()
+      .references(() => debts.id, { onDelete: "cascade" }),
+    formReceived: boolean("form_received").notNull().default(false), // e.g. a 1099-C from the creditor
+    reviewedWithPro: boolean("reviewed_with_pro").notNull().default(false),
+    note: text("note").notNull().default(""),
+    createdAt: created(),
+  },
+  (t) => [index("tax_items_owner_idx").on(t.ownerId), ownerOnly("tax_items", t)],
+).enableRLS();
+
+export type TaxItem = typeof taxItems.$inferSelect;
 export type Negotiation = typeof negotiations.$inferSelect;
 export type Offer = typeof offers.$inferSelect;
 export type Contact = typeof contacts.$inferSelect;

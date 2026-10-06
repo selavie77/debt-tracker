@@ -26,6 +26,16 @@ export function parseCsv(text: string): string[][] {
   return rows;
 }
 
+/** Build CSV text. Fields with commas, quotes or line breaks are quoted. Leading = + - @ are neutralized for spreadsheets. */
+export function toCsv(rows: (string | number | boolean | null | undefined)[][]): string {
+  const cell = (v: string | number | boolean | null | undefined) => {
+    let s = v == null ? "" : String(v);
+    if (typeof v === "string" && /^[=+\-@]/.test(s) && !/^-?\d+(\.\d+)?$/.test(s)) s = "'" + s;
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  return rows.map((r) => r.map(cell).join(",")).join("\r\n") + "\r\n";
+}
+
 /** Turn rows into objects keyed by lower-cased header names. */
 export function toRecords(rows: string[][]): Record<string, string>[] {
   if (rows.length < 2) return [];

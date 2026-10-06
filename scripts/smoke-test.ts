@@ -9,6 +9,9 @@ import * as schema from "../lib/db/schema";
 import { buildReminders } from "../lib/negotiation";
 import { listDebts, listIncome, listNegotiations, listOffers } from "../lib/queries";
 import { seedExample } from "../lib/seed";
+import { compareColumn } from "../lib/compare";
+import { debtsCsv, groupTotals, totals } from "../lib/reports";
+import { taxFlags, totalsByYear } from "../lib/tax";
 
 process.loadEnvFile(".env.local");
 const U = "33333333-3333-3333-3333-333333333333";
@@ -38,6 +41,22 @@ const TODAY = "2026-10-05";
     const ev = monthEvents(debts.map((d) => ({ ...d, id: d.debt.id, name: d.debt.name })), income, "2026-10", TODAY);
     console.log("October events:", ev.map((e) => `${e.date.slice(8)} ${e.kind} ${e.label.split(" ")[0]}`).join(" | "));
     console.log("October totals (cents):", JSON.stringify(monthTotals(ev)));
+
+    const flags = taxFlags(debts);
+    console.log("tax flags:");
+    flags.forEach((f) => console.log(`  ${f.kind} ${f.name}: forgiven $${f.forgivenCents / 100} final ${f.finalPaymentOn} form=${f.mayGetForm}`));
+    console.log("tax by year:", JSON.stringify(totalsByYear(flags)));
+
+    const t = totals(debts, TODAY);
+    console.log(`totals: owed=$${t.owedCents / 100} eliminated=$${t.eliminatedCents / 100} paid=$${t.paidCents / 100} guaranteedOwed=$${t.guaranteedOwedCents / 100}`);
+    console.log("by entity:", groupTotals(debts, (d) => d.entity.name, TODAY).map((g) => `${g.key}=$${g.totals.owedCents / 100}`).join(" | "));
+
+    const sba = debts.find((d) => d.debt.name.startsWith("SBA"))!;
+    const col = compareColumn(sba, null, TODAY);
+    console.log(`SBA compare: interest/yr=$${(col.interestPerYearCents ?? 0) / 100} payoff=${col.payoffMonths}mo checks=${col.checks.length}`);
+
+    const csv = debtsCsv(debts).split("\r\n");
+    console.log(`debts csv: ${csv.length - 2} rows; header ok=${csv[0].startsWith("entity,name,creditor,type,original")}`);
   } finally {
     await c.query("rollback");
     await c.end();

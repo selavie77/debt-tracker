@@ -7,12 +7,15 @@ import { fmtDate, todayISO } from "@/lib/dates";
 import { monthlyObligation, monthlyTotals, nextDue } from "@/lib/finance";
 import { pct, usdWhole } from "@/lib/money";
 import { buildReminders } from "@/lib/negotiation";
-import { listDebts, listEntities, listNegotiations, listOffers } from "@/lib/queries";
+import { listDebts, listEntities, listNegotiations, listOffers, listTaxItems } from "@/lib/queries";
+import { pendingTaxCount, taxFlags } from "@/lib/tax";
 
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
-  const [debts, entities, negs, offers] = await withUser((db) => Promise.all([listDebts(db), listEntities(db), listNegotiations(db), listOffers(db)]));
+  const [debts, entities, negs, offers, taxRows] = await withUser((db) =>
+    Promise.all([listDebts(db), listEntities(db), listNegotiations(db), listOffers(db), listTaxItems(db)]),
+  );
   if (debts.length === 0) {
     return (
       <>
@@ -50,6 +53,7 @@ export default async function Dashboard() {
   const series = monthlyTotals(debts, from, today);
   const points = series.length > 1 ? series.map((m) => ({ label: m.month, value: m.owedCents })) : [];
 
+  const taxPending = pendingTaxCount(taxFlags(debts), new Set(taxRows.filter((t) => t.reviewedWithPro).map((t) => t.debtId)));
   const reminders = buildReminders(
     debts.map((d) => ({ id: d.debt.id, name: d.debt.name, status: d.debt.status, owedCents: d.owed, delinquentSince: d.debt.delinquentSince })),
     negs,
@@ -98,7 +102,16 @@ export default async function Dashboard() {
               </div>
             </div>
           ))}
-          {reminders.length === 0 && <p className="note">Nothing needs attention. Late debts, silence periods ending, expiring offers and due actions appear here.</p>}
+          {taxPending > 0 && (
+            <div className="alert info">
+              <span className="dot" />
+              <div>
+                <Link href="/tax">{taxPending} settled {taxPending === 1 ? "debt has" : "debts have"} not been reviewed for tax</Link>
+                <span className="sub2">Forgiven debt can have tax consequences. Check with a professional.</span>
+              </div>
+            </div>
+          )}
+          {reminders.length === 0 && taxPending === 0 && <p className="note">Nothing needs attention. Late debts, silence periods ending, expiring offers and due actions appear here.</p>}
         </div>
       </div>
       <div className="grid g2e">

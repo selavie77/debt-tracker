@@ -8,6 +8,9 @@ const ITEMS = [
   { href: "/debts", label: "Debts" },
   { href: "/negotiations", label: "Negotiations" },
   { href: "/calendar", label: "Calendar" },
+  { href: "/compare", label: "Compare" },
+  { href: "/tax", label: "Tax review" },
+  { href: "/reports", label: "Reports" },
   { href: "/entities", label: "Entities" },
   { href: "/import", label: "Import" },
 ];

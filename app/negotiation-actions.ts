@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { withUser } from "@/lib/db";
-import { CHANNELS, STAGES, contacts, debts, income, negotiations, offers } from "@/lib/db/schema";
+import { CHANNELS, STAGES, contacts, debts, income, negotiations, offers, taxItems } from "@/lib/db/schema";
 import { isISODate, todayISO } from "@/lib/dates";
 import { nextStage } from "@/lib/negotiation";
 import { toCents } from "@/lib/money";
@@ -135,6 +135,18 @@ export async function addContact(debtId: string, _: FormState, fd: FormData): Pr
 export async function deleteContact(id: string) {
   await withUser((db) => db.delete(contacts).where(eq(contacts.id, id)));
   refresh();
+}
+
+export async function saveTaxItem(debtId: string, _: FormState, fd: FormData): Promise<FormState> {
+  const values = {
+    debtId,
+    formReceived: fd.get("formReceived") === "on",
+    reviewedWithPro: fd.get("reviewedWithPro") === "on",
+    note: str(fd, "note"),
+  };
+  await withUser((db) => db.insert(taxItems).values(values).onConflictDoUpdate({ target: taxItems.debtId, set: values }));
+  refresh();
+  return { ok: "Saved" };
 }
 
 export async function addIncome(_: FormState, fd: FormData): Promise<FormState> {

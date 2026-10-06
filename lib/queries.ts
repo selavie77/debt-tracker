@@ -1,8 +1,8 @@
 import { asc, desc, eq } from "drizzle-orm";
 import type { Db } from "./db";
 import {
-  contacts, debts, entities, income, negotiations, offers, payments, settlements,
-  type Debt, type Entity, type Income, type Negotiation, type Offer, type Payment, type Settlement,
+  contacts, debts, entities, income, negotiations, offers, payments, settlements, taxItems,
+  type Debt, type Entity, type Income, type Negotiation, type Offer, type Payment, type Settlement, type TaxItem,
 } from "./db/schema";
 import { balanceAt, eliminated, totalPaid, type DebtBundle } from "./finance";
 import { todayISO } from "./dates";
@@ -68,6 +68,10 @@ export async function listOffers(db: Db): Promise<Offer[]> {
 
 export async function listIncome(db: Db): Promise<Income[]> {
   return db.select().from(income).orderBy(asc(income.dayOfMonth));
+}
+
+export async function listTaxItems(db: Db): Promise<TaxItem[]> {
+  return db.select().from(taxItems);
 }
 
 export async function getNegotiationBundle(db: Db, debtId: string) {

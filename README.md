@@ -38,7 +38,8 @@ Track debts, settlements and payments across people and companies. Neutral track
 - `lib/finance.ts`: all money logic (pure, tested).
 - `lib/db/schema.ts`: tables and policies. Money is integer cents.
 - `app/actions.ts`: server actions. `app/login/`: sign in, sign up, email link. `app/auth/callback`: sign-in link landing.
-- `app/(app)/`: Dashboard, Debts, Debt detail, Negotiations, Calendar, Entities, Import (all require login).
+- `app/(app)/`: Dashboard, Debts, Debt detail, Negotiations, Calendar, Compare, Tax review, Reports (with CSV export), Entities, Import (all require login).
+- `lib/compare.ts`, `lib/tax.ts`, `lib/reports.ts`: side-by-side facts, tax-review flags and totals/exports. Facts and reminders only, never advice.
 - `lib/negotiation.ts`: stages, silence timer, dashboard reminders. `lib/calendar.ts`: month view logic. `lib/templates.ts`: sample letters. All pure and tested.
 - `app/negotiation-actions.ts`: negotiation, offer, contact and income actions.
 
