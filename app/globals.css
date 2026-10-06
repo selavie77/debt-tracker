@@ -99,6 +99,41 @@ textarea{min-height:70px;resize:vertical}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px;min-width:0}
 .card .t{font-weight:600}
 .steps{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+/* Landing page */
+.lp{max-width:1100px;margin:0 auto;padding-block:20px 48px;display:flex;flex-direction:column;gap:72px}
+.lp-top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.lp-brand{font:700 18px/1.2 var(--f-display),system-ui,sans-serif;letter-spacing:-.01em}
+.lp-hero{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,.95fr);gap:40px;align-items:center}
+.lp-eyebrow{font:600 12px var(--f-body);text-transform:uppercase;letter-spacing:.1em;color:var(--accent);margin:0 0 12px}
+.lp h1{font:700 clamp(30px,5vw,48px)/1.08 var(--f-display),system-ui,sans-serif;letter-spacing:-.025em;margin:0 0 16px;text-wrap:balance}
+.lp-lede{font-size:17px;line-height:1.55;color:var(--muted);margin:0 0 24px;max-width:56ch}
+.lp-example{display:flex;flex-direction:column;gap:12px;margin:0}
+.lp-example figcaption{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.lp-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0;border-top:1px solid var(--line);padding-top:12px}
+.lp-facts dt{font-size:11.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.lp-facts dd{margin:2px 0 0;font-size:15px}
+.lp-section{display:flex;flex-direction:column;gap:20px;min-width:0}
+.lp-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:40px;align-items:start}
+.lp-h2{font:700 clamp(22px,3vw,28px)/1.15 var(--f-display),system-ui,sans-serif;letter-spacing:-.015em;text-transform:none;color:var(--fg);margin:0;text-wrap:balance}
+.lp-prose{display:flex;flex-direction:column;gap:14px;font-size:15.5px;line-height:1.6;max-width:62ch}
+.lp-prose p{margin:0}
+.lp-features{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 40px}
+.lp-features li{border-top:1px solid var(--line);padding:16px 0 20px}
+.lp-features li:last-child:nth-child(odd){grid-column:1/-1}
+.lp-features h3{font:600 16px/1.3 var(--f-body);margin:0 0 4px}
+.lp-features p{margin:0;color:var(--muted);line-height:1.55;max-width:52ch}
+.lp-stages{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px 4px;align-items:center}
+.lp-stages li{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:6px 14px;font-weight:500}
+.lp-stages li:not(:last-child)::after{content:"\2192";color:var(--muted);margin-left:14px;margin-right:-4px}
+.lp-cta{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;padding:24px}
+.lp-foot{border-top:1px solid var(--line);padding-top:20px;color:var(--muted);font-size:12.5px;line-height:1.55;display:flex;flex-direction:column;gap:8px}
+.lp-foot p{margin:0;max-width:80ch}
+@media (max-width:860px){
+  .lp{gap:56px}
+  .lp-hero,.lp-split{grid-template-columns:minmax(0,1fr);gap:24px}
+  .lp-features{grid-template-columns:minmax(0,1fr)}
+  .lp-facts{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 .checks{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:13.5px}
 label.pick{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
 label.pick input{width:auto}

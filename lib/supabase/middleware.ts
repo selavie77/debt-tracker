@@ -19,7 +19,8 @@ export async function updateSession(request: NextRequest) {
   // getUser() checks the token with Supabase; getSession() alone would trust the cookie.
   const { data } = await supabase.auth.getUser();
   const path = request.nextUrl.pathname;
-  if (!data.user && !PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + "/"))) {
+  const isPublic = path === "/" || PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + "/"));
+  if (!data.user && !isPublic) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";

@@ -39,11 +39,11 @@ export async function authenticate(_: AuthState, fd: FormData): Promise<AuthStat
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: "Email or password is not right" };
   }
-  redirect("/");
+  redirect("/dashboard");
 }
 
 export async function signOut() {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  redirect("/login");
+  redirect("/");
 }
