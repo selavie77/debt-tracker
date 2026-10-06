@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, date, index, integer, pgPolicy, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, pgPolicy, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { authenticatedRole, authUid, authUsers } from "drizzle-orm/supabase";
 
 // Money is always stored as integer cents. Dates are ISO strings (YYYY-MM-DD).
@@ -208,6 +208,35 @@ export const taxItems = pgTable(
   (t) => [index("tax_items_owner_idx").on(t.ownerId), ownerOnly("tax_items", t)],
 ).enableRLS();
 
+// ---- Phase 4: email reminders ----
+
+export const notificationPrefs = pgTable(
+  "notification_prefs",
+  {
+    id: pk(),
+    ownerId: owner().unique(),
+    emailReminders: boolean("email_reminders").notNull().default(false), // opt-in
+    lastSentOn: date("last_sent_on", { mode: "string" }),
+    lastTestAt: timestamp("last_test_at", { withTimezone: true, mode: "string" }),
+    createdAt: created(),
+  },
+  (t) => [ownerOnly("notification_prefs", t)],
+).enableRLS();
+
+/** One row per reminder already emailed, so the same countdown step is never sent twice. */
+export const reminderSent = pgTable(
+  "reminder_sent",
+  {
+    id: pk(),
+    ownerId: owner(),
+    key: text("key").notNull(),
+    sentOn: date("sent_on", { mode: "string" }).notNull(),
+    createdAt: created(),
+  },
+  (t) => [unique("reminder_sent_owner_key").on(t.ownerId, t.key), ownerOnly("reminder_sent", t)],
+).enableRLS();
+
+export type NotificationPrefs = typeof notificationPrefs.$inferSelect;
 export type TaxItem = typeof taxItems.$inferSelect;
 export type Negotiation = typeof negotiations.$inferSelect;
 export type Offer = typeof offers.$inferSelect;

@@ -11,6 +11,7 @@ const ITEMS = [
   { href: "/compare", label: "Compare" },
   { href: "/tax", label: "Tax review" },
   { href: "/reports", label: "Reports" },
+  { href: "/settings", label: "Settings" },
   { href: "/entities", label: "Entities" },
   { href: "/import", label: "Import" },
 ];

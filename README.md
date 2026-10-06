@@ -29,6 +29,16 @@ Track debts, settlements and payments across people and companies. Neutral track
 | `node scripts/rls-test.cjs` | Prove users cannot see each other's data on every table (rolls back, saves nothing) |
 | `npx tsx scripts/smoke-test.ts` | Load example data as a throwaway user and run the real queries, reminders and calendar (rolls back) |
 
+## Email reminders
+A daily job (`vercel.json` cron, 13:00 UTC) emails users who turned reminders on in Settings. It sends at most one email a day, only when something time-sensitive is new (silence period ending, counter-offer expiring, next action due), and once per countdown step (14, 7, 3, 1, 0 days, then once overdue). Late debts alone never trigger an email. Emails include debt names, not balances.
+
+Environment variables on Vercel (never commit them):
+- `RESEND_API_KEY`: a Resend key with sending access for `updates.thedebtplaybook.com`
+- `CRON_SECRET`: a long random string. Vercel sends it as `Authorization: Bearer ...` to `/api/cron/reminders`, which rejects anything else.
+- `APP_URL` (optional): defaults to `https://thedebtplaybook.com`
+
+Test the job end to end with a throwaway user and a fake sender: `npx tsx scripts/reminders-job-test.ts`.
+
 ## How user data is protected
 - Every table has `owner_id` (defaults to the signed-in user) and a row-level-security policy: `owner_id = auth.uid()`.
 - `withUser()` in `lib/db/index.ts` runs each request in a transaction as the `authenticated` role with the user's id set, so Postgres enforces the policy even if app code has a bug.

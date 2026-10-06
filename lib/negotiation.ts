@@ -46,7 +46,38 @@ export type Reminder = {
   title: string;
   detail: string;
   sortKey: number; // lower is more urgent
+  kind: ReminderKind;
+  dueOn: string | null; // the date the item turns on (null for "late")
 };
+
+export type ReminderKind = "late" | "silence_end" | "silence_over" | "action" | "offer_expiry";
+
+/** Coarse countdown steps, so an item is emailed once per step instead of every day. */
+export function reminderBucket(dueOn: string | null, today: string): string {
+  if (!dueOn) return "-";
+  const left = daysBetween(today, dueOn);
+  if (left < 0) return "over";
+  if (left === 0) return "0";
+  if (left === 1) return "1";
+  if (left <= 3) return "3";
+  if (left <= 7) return "7";
+  return "14";
+}
+
+/** Stable id for "this item at this countdown step". An email is sent once per key. */
+export function reminderKey(r: Pick<Reminder, "debtId" | "kind" | "dueOn">, today: string): string {
+  return `${r.debtId}:${r.kind}:${r.dueOn ?? "-"}:${reminderBucket(r.dueOn, today)}`;
+}
+
+/** Time-sensitive reminders whose countdown step has not been emailed yet. */
+export function pickNew(reminders: Reminder[], sentKeys: Set<string>, today: string): Reminder[] {
+  return reminders.filter((r) => isTimeSensitive(r) && !sentKeys.has(reminderKey(r, today)));
+}
+
+/** Lateness alone never triggers an email. It is listed once something time-sensitive does. */
+export function isTimeSensitive(r: Pick<Reminder, "kind">): boolean {
+  return r.kind !== "late";
+}
 
 export type ReminderDebt = { id: string; name: string; status: string; owedCents: number; delinquentSince: string | null };
 export type ReminderOffer = { debtId: string; party: "us" | "creditor"; madeOn: string; expiresOn: string | null; amountCents: number };
@@ -72,6 +103,8 @@ export function buildReminders(
           title: `${d.name} is ${days} days late`,
           detail: `Late since ${fmtDate(d.delinquentSince)}.`,
           sortKey: days >= 90 ? 30 : 40,
+          kind: "late",
+          dueOn: null,
         });
       }
     }
@@ -83,8 +116,8 @@ export function buildReminders(
       if (p && p.left <= WINDOW_DAYS) {
         out.push(
           p.left < 0
-            ? { level: "warn", debtId: n.debtId, title: `${name(n.debtId)}: silence period is over`, detail: `It ended ${fmtDate(p.endsOn)}. Decide the next step.`, sortKey: 10 }
-            : { level: "info", debtId: n.debtId, title: `${name(n.debtId)}: silence period ends ${fmtDate(p.endsOn)}`, detail: p.left === 0 ? "Ends today." : `${p.left} days left of ${p.total}.`, sortKey: 20 + p.left },
+            ? { level: "warn", debtId: n.debtId, title: `${name(n.debtId)}: silence period is over`, detail: `It ended ${fmtDate(p.endsOn)}. Decide the next step.`, sortKey: 10, kind: "silence_over", dueOn: p.endsOn }
+            : { level: "info", debtId: n.debtId, title: `${name(n.debtId)}: silence period ends ${fmtDate(p.endsOn)}`, detail: p.left === 0 ? "Ends today." : `${p.left} days left of ${p.total}.`, sortKey: 20 + p.left, kind: "silence_end", dueOn: p.endsOn },
         );
       }
     }
@@ -97,6 +130,8 @@ export function buildReminders(
           title: `${name(n.debtId)}: ${n.nextActionNote || "next action"}`,
           detail: left < 0 ? `Was due ${fmtDate(n.nextActionOn)} (${-left} days ago).` : left === 0 ? "Due today." : `Due ${fmtDate(n.nextActionOn)}.`,
           sortKey: left < 0 ? 0 : left,
+          kind: "action",
+          dueOn: n.nextActionOn,
         });
       }
     }
@@ -115,6 +150,8 @@ export function buildReminders(
         title: `${name(o.debtId)}: counter-offer ${left < 0 ? "expired" : "expires"} ${fmtDate(o.expiresOn)}`,
         detail: left < 0 ? "No reply logged since." : left === 0 ? "Expires today." : `${left} days left to respond.`,
         sortKey: left < 0 ? 1 : 2 + left,
+        kind: "offer_expiry",
+        dueOn: o.expiresOn,
       });
     }
   }

@@ -1,7 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login", "/auth"];
+// /api/cron has no user session. The route checks its own bearer secret.
+const PUBLIC_PATHS = ["/login", "/auth", "/api/cron"];
 
 /** Refresh the session cookie and send signed-out visitors to /login. */
 export async function updateSession(request: NextRequest) {
