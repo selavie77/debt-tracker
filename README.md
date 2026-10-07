@@ -39,6 +39,9 @@ Environment variables on Vercel (never commit them):
 
 Test the job end to end with a throwaway user and a fake sender: `npx tsx scripts/reminders-job-test.ts`.
 
+## Example data
+Example debts, entities and income carry `is_example = true`. Settings shows what will be removed and a confirm button; `lib/example-data.ts` deletes only those rows (and example entities with no remaining debt). Adding a real debt under an example entity turns that entity into a real one. Test: `npx tsx scripts/example-data-test.ts`.
+
 ## How user data is protected
 - Every table has `owner_id` (defaults to the signed-in user) and a row-level-security policy: `owner_id = auth.uid()`.
 - `withUser()` in `lib/db/index.ts` runs each request in a transaction as the `authenticated` role with the user's id set, so Postgres enforces the policy even if app code has a bug.

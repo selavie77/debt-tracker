@@ -10,6 +10,7 @@ import { DEBT_STATUSES, DEBT_TYPES, debts, entities, payments, settlements } fro
 import { isISODate, todayISO } from "@/lib/dates";
 import { balanceAt } from "@/lib/finance";
 import { toCents } from "@/lib/money";
+import { clearExample, markEntityReal } from "@/lib/example-data";
 import { getDebt } from "@/lib/queries";
 import { seedExample, seedNegotiationExamples } from "@/lib/seed";
 
@@ -66,6 +67,13 @@ export async function loadExampleData() {
   refresh();
 }
 
+/** Removes only rows flagged as example data, then returns to the dashboard. */
+export async function clearExampleData(): Promise<FormState> {
+  await withUser((db) => clearExample(db));
+  refresh();
+  redirect("/dashboard");
+}
+
 export async function loadNegotiationExamples() {
   await withUser((db) => seedNegotiationExamples(db));
   refresh();
@@ -110,7 +118,10 @@ function debtInput(fd: FormData) {
 export async function createDebt(_: FormState, fd: FormData): Promise<FormState> {
   const p = debtInput(fd);
   if (!p.success) return fail(p.error);
-  const row = await withUser(async (db) => (await db.insert(debts).values(p.data).returning({ id: debts.id }))[0]);
+  const row = await withUser(async (db) => {
+    await markEntityReal(db, p.data.entityId);
+    return (await db.insert(debts).values(p.data).returning({ id: debts.id }))[0];
+  });
   refresh();
   redirect(`/debts/${row.id}`);
 }
@@ -258,7 +269,9 @@ export async function importCsv(_: FormState, fd: FormData): Promise<FormState> 
       const made = await db.insert(entities).values(toCreate).returning();
       made.forEach((e) => entityByName.set(e.name.toLowerCase(), e.id));
     }
-    await db.insert(debts).values(pending.map((p) => ({ ...p.row, entityId: entityByName.get(p.entityName.toLowerCase())! })));
+    const entityIds = pending.map((p) => entityByName.get(p.entityName.toLowerCase())!);
+    for (const id of new Set(entityIds)) await markEntityReal(db, id);
+    await db.insert(debts).values(pending.map((p, i) => ({ ...p.row, entityId: entityIds[i] })));
     return { ok: `Imported ${pending.length} debts${toCreate.length ? ` and ${toCreate.length} new entities` : ""}` };
   });
   refresh();

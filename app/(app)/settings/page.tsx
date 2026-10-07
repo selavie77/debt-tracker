@@ -1,17 +1,24 @@
+import { eq } from "drizzle-orm";
+import { clearExampleData } from "@/app/actions";
 import { resetSentReminders, saveReminderPrefs, sendTestReminder } from "@/app/settings-actions";
 import { ActionForm } from "@/components/ActionForm";
 import { PageHead } from "@/components/Bits";
 import { ActionButton } from "@/components/TestEmailButton";
 import { fmtDate } from "@/lib/dates";
 import { requireUser, withUser } from "@/lib/db";
-import { notificationPrefs } from "@/lib/db/schema";
+import { debts, notificationPrefs } from "@/lib/db/schema";
 import { emailConfigured } from "@/lib/email";
+import { exampleSummary } from "@/lib/example-data";
 
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   const user = await requireUser();
-  const prefs = await withUser(async (db) => (await db.select().from(notificationPrefs))[0] ?? null);
+  const { prefs, example, realDebts } = await withUser(async (db) => ({
+    prefs: (await db.select().from(notificationPrefs))[0] ?? null,
+    example: await exampleSummary(db),
+    realDebts: (await db.select({ id: debts.id }).from(debts).where(eq(debts.isExample, false))).length,
+  }));
   const configured = emailConfigured();
 
   return (
@@ -24,6 +31,35 @@ export default async function SettingsPage() {
           <div className="item"><span className="note">Signed in as</span><span>{user.email}</span></div>
         </div>
       </div>
+
+      {example.total > 0 && (
+        <div className="panel" id="example">
+          <h2>Example data</h2>
+          <p>
+            Your account has example data from the book: {example.debts.length} debts, {example.entities.length} entities and {example.incomeCount} income entries. Clear it before you enter your own debts so the totals show only real numbers.
+          </p>
+          <p className="note">
+            {realDebts > 0
+              ? `Your ${realDebts} real ${realDebts === 1 ? "debt is" : "debts are"} not affected. Only the example rows are removed.`
+              : "You have no real debts yet. After clearing, the dashboard will be empty and ready for your own."}
+          </p>
+          <details>
+            <summary style={{ cursor: "pointer", fontWeight: 600 }}>Clear example data...</summary>
+            <div style={{ marginTop: 12 }}>
+              <p className="note">This permanently deletes these debts and everything attached to them (payments, settlements, negotiations, offers, contacts and tax notes):</p>
+              <ul className="checks">
+                {example.debts.map((d) => <li key={d.id}>{d.name}</li>)}
+              </ul>
+              {example.entities.length > 0 && (
+                <p className="note">
+                  Entities removed with them, unless you added a real debt to one: {example.entities.map((e) => e.name).join(", ")}.
+                </p>
+              )}
+              <ActionButton action={clearExampleData} label="Yes, clear the example data" className="btn danger" />
+            </div>
+          </details>
+        </div>
+      )}
 
       <div className="panel">
         <h2>Email reminders</h2>

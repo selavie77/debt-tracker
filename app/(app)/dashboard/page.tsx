@@ -67,6 +67,11 @@ export default async function Dashboard() {
       <PageHead title="Dashboard" sub={`${debts.length} debts across ${entities.length} ${entities.length === 1 ? "entity" : "entities"}.`}>
         <Link className="btn" href="/debts/new">Add debt</Link>
       </PageHead>
+      {debts.some((d) => d.debt.isExample) && (
+        <div className="msg" style={{ background: "var(--info-soft)", color: "var(--info)" }}>
+          You are looking at example data from the book. <Link href="/settings#example">Clear it in Settings</Link> when you are ready to enter your own debts.
+        </div>
+      )}
       <div className="grid g4">
         <Kpi label="Owed today" value={usdWhole(owed)} sub={`of ${usdWhole(original)} originally`} />
         <Kpi label="Eliminated" value={usdWhole(gone)} sub={`${pct(gone, original)}% of the original total`} hero />

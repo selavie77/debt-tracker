@@ -2,6 +2,7 @@
 // Creates a throwaway user, runs the job with a FAKE sender (nothing is emailed), then deletes the user,
 // which cascades to every row it created. The job is limited to this user, so real accounts are never touched.
 // Run: npx tsx scripts/reminders-job-test.ts
+export {}; // makes this file its own module
 process.loadEnvFile(".env.local");
 
 const TEST_USER = "44444444-4444-4444-4444-444444444444";

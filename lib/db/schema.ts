@@ -44,6 +44,7 @@ export const entities = pgTable(
     ownerId: owner(),
     name: text("name").notNull(),
     kind: text("kind", { enum: ["person", "business"] }).notNull(),
+    isExample: boolean("is_example").notNull().default(false),
     createdAt: created(),
   },
   (t) => [index("entities_owner_idx").on(t.ownerId), ownerOnly("entities", t)],
@@ -70,6 +71,7 @@ export const debts = pgTable(
     monthlyPaymentCents: integer("monthly_payment_cents"), // for non-settled debts
     paymentDay: integer("payment_day"), // 1-28
     notes: text("notes").notNull().default(""),
+    isExample: boolean("is_example").notNull().default(false),
     createdAt: created(),
   },
   (t) => [index("debts_entity_idx").on(t.entityId), index("debts_owner_idx").on(t.ownerId), ownerOnly("debts", t)],
@@ -184,6 +186,7 @@ export const income = pgTable(
     name: text("name").notNull(),
     amountCents: integer("amount_cents").notNull(),
     dayOfMonth: integer("day_of_month").notNull(), // 1-28
+    isExample: boolean("is_example").notNull().default(false),
     createdAt: created(),
   },
   (t) => [index("income_owner_idx").on(t.ownerId), ownerOnly("income", t)],

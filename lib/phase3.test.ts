@@ -8,13 +8,13 @@ import type { Debt, Entity, Payment, Settlement } from "./db/schema";
 import type { DebtFull } from "./queries";
 
 const TODAY = "2026-10-05";
-const ent = (name: string): Entity => ({ id: name, ownerId: "u", name, kind: "business", createdAt: "" });
+const ent = (name: string): Entity => ({ id: name, ownerId: "u", name, kind: "business", isExample: false, createdAt: "" });
 
 function mk(over: Partial<Debt>, settlement: Partial<Settlement> | null = null, pays: Partial<Payment>[] = [], entity = "Biz LLC"): DebtFull {
   const debt: Debt = {
     id: over.name ?? "d", ownerId: "u", entityId: entity, name: "Debt", creditor: "", type: "other", originalCents: 1_000_000,
     rateBps: null, collateral: "", personalGuarantee: false, government: false, status: "active", delinquentSince: null,
-    monthlyPaymentCents: null, paymentDay: null, notes: "", createdAt: "2026-01-01", ...over,
+    monthlyPaymentCents: null, paymentDay: null, notes: "", isExample: false, createdAt: "2026-01-01", ...over,
   };
   const s: Settlement | null = settlement
     ? { id: "s", ownerId: "u", debtId: debt.id, agreedCents: 300_000, installmentCents: 100_000, installments: 3, agreedOn: "2026-02-01", firstPaymentOn: "2026-03-01", notes: "", createdAt: "", ...settlement }

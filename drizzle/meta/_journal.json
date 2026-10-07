@@ -29,6 +29,13 @@
       "when": 1791325275346,
       "tag": "0003_reminders",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791328693845,
+      "tag": "0004_example_flag",
+      "breakpoints": true
     }
   ]
 }

@@ -13,6 +13,7 @@ import { compareColumn } from "../lib/compare";
 import { debtsCsv, groupTotals, totals } from "../lib/reports";
 import { taxFlags, totalsByYear } from "../lib/tax";
 
+export {}; // makes this file its own module
 process.loadEnvFile(".env.local");
 const U = "33333333-3333-3333-3333-333333333333";
 const TODAY = "2026-10-05";

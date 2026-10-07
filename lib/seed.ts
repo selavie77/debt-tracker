@@ -47,8 +47,8 @@ export async function seedNegotiationExamples(db: Db): Promise<boolean> {
   const [anyIncome] = await db.select({ id: income.id }).from(income).limit(1);
   if (!anyIncome) {
     await db.insert(income).values([
-      { name: "Salary", amountCents: c(2100), dayOfMonth: 1 },
-      { name: "Salary", amountCents: c(2100), dayOfMonth: 16 },
+      { name: "Salary", amountCents: c(2100), dayOfMonth: 1, isExample: true },
+      { name: "Salary", amountCents: c(2100), dayOfMonth: 16, isExample: true },
     ]);
   }
   return true;
@@ -59,8 +59,8 @@ export async function seedExample(db: Db) {
   const [me, biz] = await db
     .insert(entities)
     .values([
-      { name: "Francis (personal)", kind: "person" },
-      { name: "Operating Co. LLC", kind: "business" },
+      { name: "Francis (personal)", kind: "person", isExample: true },
+      { name: "Operating Co. LLC", kind: "business", isExample: true },
     ])
     .returning({ id: entities.id });
 
@@ -71,7 +71,7 @@ export async function seedExample(db: Db) {
     type: DebtType,
     original: number,
     extra: Partial<typeof debts.$inferInsert> = {},
-  ) => ({ entityId, name, creditor, type, originalCents: c(original), ...extra });
+  ) => ({ entityId, name, creditor, type, originalCents: c(original), isExample: true, ...extra });
 
   const rows = [
     mk(biz.id, "IRS federal tax", "Internal Revenue Service", "federal_tax", 120000, { government: true, status: "paid" as DebtStatus }),
