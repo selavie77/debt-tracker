@@ -1,6 +1,6 @@
 import { daysBetween, todayISO } from "./dates";
 import { amortize } from "./finance";
-import { TYPE_LABEL } from "./labels";
+import { TYPE_LABEL, isTaxDebtType } from "./labels";
 import { usdWhole } from "./money";
 import type { DebtFull } from "./queries";
 
@@ -42,7 +42,7 @@ export function compareColumn(d: DebtFull, stage: string | null, today = todayIS
   const daysLate = debt.delinquentSince && d.owed > 0 ? Math.max(0, daysBetween(debt.delinquentSince, today)) : 0;
 
   const checks: string[] = [];
-  if (debt.type === "federal_tax" || debt.type === "state_tax") {
+  if (isTaxDebtType(debt.type)) {
     checks.push("Tax debts have their own payment and compromise rules. Read the agency's official guidance.");
   }
   if (debt.government) {
@@ -50,6 +50,9 @@ export function compareColumn(d: DebtFull, stage: string | null, today = todayIS
   }
   if (debt.collateral) {
     checks.push(`Secured by ${debt.collateral}. Read the contract for lien, repossession and default terms.`);
+  } else if (debt.type === "auto_loan" || debt.type === "mortgage") {
+    const what = debt.type === "auto_loan" ? "the vehicle" : "the property";
+    checks.push(`Usually secured by ${what}. Read the contract for lien, default and ${debt.type === "auto_loan" ? "repossession" : "foreclosure"} terms.`);
   }
   if (debt.personalGuarantee) {
     checks.push("A personal guarantee can make you personally liable if the business does not pay.");
@@ -66,7 +69,7 @@ export function compareColumn(d: DebtFull, stage: string | null, today = todayIS
   if (settlement) {
     checks.push("Settlement in place. Keep the written agreement and every payment receipt.");
   }
-  if (debt.type === "credit_card" || debt.type === "business_loan") {
+  if (["credit_card", "business_loan", "personal_loan", "line_of_credit", "medical"].includes(debt.type)) {
     checks.push("Ask for any settlement terms in writing before paying.");
   }
 

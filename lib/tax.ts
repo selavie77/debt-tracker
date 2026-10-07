@@ -1,5 +1,6 @@
 import type { DebtFull } from "./queries";
 import { settlementSchedule } from "./finance";
+import { isTaxDebtType } from "./labels";
 
 // Tracks which settled debts may have tax consequences so they are not forgotten.
 // This is a reminder list, not tax advice. Rules differ by debt type, entity, state and the
@@ -30,7 +31,7 @@ export function taxFlags(debts: DebtFull[]): TaxFlag[] {
     const paidOff = d.owed <= 0;
     const lastPaid = d.payments.length ? d.payments[d.payments.length - 1].paidOn : lastScheduled;
     const finalPaymentOn = paidOff ? lastPaid : lastScheduled;
-    const isTax = d.debt.type === "federal_tax" || d.debt.type === "state_tax";
+    const isTax = isTaxDebtType(d.debt.type);
     out.push({
       debtId: d.debt.id,
       name: d.debt.name,

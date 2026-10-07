@@ -11,6 +11,7 @@ import { isISODate, todayISO } from "@/lib/dates";
 import { balanceAt } from "@/lib/finance";
 import { toCents } from "@/lib/money";
 import { clearExample, markEntityReal } from "@/lib/example-data";
+import { parseDebtType } from "@/lib/labels";
 import { getDebt } from "@/lib/queries";
 import { seedExample, seedNegotiationExamples } from "@/lib/seed";
 
@@ -206,10 +207,6 @@ export async function saveSettlement(debtId: string, _: FormState, fd: FormData)
   return result;
 }
 
-const TYPE_ALIASES: Record<string, (typeof DEBT_TYPES)[number]> = {
-  "federal tax": "federal_tax", "state tax": "state_tax", "business loan": "business_loan",
-  "government loan": "government_loan", "credit card": "credit_card", secured: "secured", "personal loan": "personal_loan",
-};
 const yes = (v: string | undefined) => /^(y|yes|true|1|x)$/i.test((v ?? "").trim());
 
 /** Import debts or payments from pasted CSV. The whole file is validated before anything is written. */
@@ -256,7 +253,7 @@ export async function importCsv(_: FormState, fd: FormData): Promise<FormState> 
         entityName: eName,
         row: {
           name: r.name, creditor: r.creditor ?? "",
-          type: TYPE_ALIASES[(r.type ?? "").toLowerCase()] ?? (DEBT_TYPES.find((t) => t === r.type) ?? "other"),
+          type: parseDebtType(r.type),
           originalCents: original, rateBps: rate != null && Number.isFinite(rate) ? Math.round(rate * 100) : null,
           status: DEBT_STATUSES.find((s) => s === (r.status ?? "").toLowerCase()) ?? "active",
           monthlyPaymentCents: r.monthly ? toCents(r.monthly) : null,

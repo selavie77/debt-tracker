@@ -23,13 +23,19 @@ const ownerOnly = (table: string, t: { ownerId: unknown }) =>
   });
 
 export const DEBT_TYPES = [
-  "federal_tax",
-  "state_tax",
+  "federal_tax", // shown as "Federal back taxes"
+  "state_tax", // shown as "State back taxes"
+  "other_tax", // payroll, local, property and other back taxes
   "business_loan",
   "government_loan",
   "credit_card",
+  "auto_loan",
+  "mortgage",
   "secured",
+  "student_loan",
   "personal_loan",
+  "line_of_credit",
+  "medical",
   "other",
 ] as const;
 export type DebtType = (typeof DEBT_TYPES)[number];
