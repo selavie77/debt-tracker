@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { monthEvents, monthTotals, shiftMonth, type CalBundle } from "./calendar";
+import { LAST_DAY_OF_MONTH, dayOfMonthLabel, monthEvents, monthTotals, shiftMonth, type CalBundle } from "./calendar";
 import { addDays } from "./dates";
 import { buildReminders, nextStage, silenceProgress } from "./negotiation";
 
@@ -100,6 +100,24 @@ describe("calendar", () => {
   it("totals the month", () => {
     const t = monthTotals(monthEvents([settled, sba], income, "2026-11", "2026-10-05"));
     expect(t).toEqual({ income: 210_000, paid: 0, toPay: 138_889 + 75_000, leftAfter: 210_000 - 138_889 - 75_000 });
+  });
+  it("pays on the 15th and the last day of every month, including short ones", () => {
+    const twice = [
+      { name: "Pay", amountCents: 200_000, dayOfMonth: 15 },
+      { name: "Pay", amountCents: 200_000, dayOfMonth: LAST_DAY_OF_MONTH },
+    ];
+    const dates = (m: string) => monthEvents([], twice, m, "2026-01-01").map((e) => e.date);
+    expect(dates("2026-01")).toEqual(["2026-01-15", "2026-01-31"]);
+    expect(dates("2026-02")).toEqual(["2026-02-15", "2026-02-28"]);
+    expect(dates("2028-02")).toEqual(["2028-02-15", "2028-02-29"]); // leap year
+    expect(dates("2026-04")).toEqual(["2026-04-15", "2026-04-30"]);
+    expect(monthTotals(monthEvents([], twice, "2026-04", "2026-01-01")).income).toBe(400_000);
+  });
+  it("labels pay days", () => {
+    expect([1, 2, 3, 4, 11, 12, 13, 15, 21, 22, 23, 30].map((d) => dayOfMonthLabel(d))).toEqual([
+      "the 1st", "the 2nd", "the 3rd", "the 4th", "the 11th", "the 12th", "the 13th", "the 15th", "the 21st", "the 22nd", "the 23rd", "the 30th",
+    ]);
+    expect(dayOfMonthLabel(LAST_DAY_OF_MONTH)).toBe("the last day of the month");
   });
   it("shifts months", () => {
     expect(shiftMonth("2026-12", 1)).toBe("2027-01");

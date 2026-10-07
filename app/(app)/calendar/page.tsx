@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { addIncome, deleteIncome } from "@/app/negotiation-actions";
-import { ActionForm } from "@/components/ActionForm";
+import { deleteIncome } from "@/app/negotiation-actions";
 import { Kpi, PageHead } from "@/components/Bits";
-import { monthEvents, monthTotals, shiftMonth, type CalEvent } from "@/lib/calendar";
+import { IncomeForm } from "@/components/IncomeForm";
+import { dayOfMonthLabel, monthEvents, monthTotals, shiftMonth, type CalEvent } from "@/lib/calendar";
 import { fmtDate, todayISO } from "@/lib/dates";
 import { withUser } from "@/lib/db";
 import { usd, usdWhole } from "@/lib/money";
@@ -92,12 +92,12 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           </div>
         </div>
         <div className="panel">
-          <h2>Monthly income</h2>
+          <h2>Income</h2>
           <div className="list">
-            {incomeRows.length === 0 && <p className="note">Add what you expect to receive each month, such as a salary or business draw, to see what is left after debt payments.</p>}
+            {incomeRows.length === 0 && <p className="note">Add what you expect to receive, such as a paycheck on the 15th and the last day of the month, to see what is left after debt payments.</p>}
             {incomeRows.map((r) => (
               <div className="item" key={r.id}>
-                <div>{r.name}<span className="sub2">on day {r.dayOfMonth} each month</span></div>
+                <div>{r.name}<span className="sub2">on {dayOfMonthLabel(r.dayOfMonth)} each month</span></div>
                 <div className="actions">
                   <span className="num">{usd(r.amountCents)}</span>
                   <form action={deleteIncome.bind(null, r.id)}><button className="btn danger small" type="submit">Delete</button></form>
@@ -106,11 +106,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             ))}
           </div>
           <h2 style={{ marginTop: 16 }}>Add income</h2>
-          <ActionForm action={addIncome} submitLabel="Add income" resetOnSuccess>
-            <label>Name<input type="text" name="name" placeholder="Salary" required /></label>
-            <label>Amount ($)<input type="text" inputMode="decimal" name="amount" required /></label>
-            <label>Day of month (1 to 28)<input type="number" name="day" min={1} max={28} defaultValue={1} required /></label>
-          </ActionForm>
+          <IncomeForm />
         </div>
       </div>
     </>

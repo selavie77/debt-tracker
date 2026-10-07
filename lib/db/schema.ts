@@ -191,7 +191,7 @@ export const income = pgTable(
     ownerId: owner(),
     name: text("name").notNull(),
     amountCents: integer("amount_cents").notNull(),
-    dayOfMonth: integer("day_of_month").notNull(), // 1-28
+    dayOfMonth: integer("day_of_month").notNull(), // 1-30, or 31 for the last day of the month
     isExample: boolean("is_example").notNull().default(false),
     createdAt: created(),
   },

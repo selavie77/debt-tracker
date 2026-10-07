@@ -6,6 +6,7 @@ import { z } from "zod";
 import { withUser } from "@/lib/db";
 import { CHANNELS, STAGES, contacts, debts, income, negotiations, offers, taxItems } from "@/lib/db/schema";
 import { isISODate, todayISO } from "@/lib/dates";
+import { parseIncome } from "@/lib/income";
 import { nextStage } from "@/lib/negotiation";
 import { toCents } from "@/lib/money";
 import type { FormState } from "./actions";
@@ -149,18 +150,17 @@ export async function saveTaxItem(debtId: string, _: FormState, fd: FormData): P
   return { ok: "Saved" };
 }
 
+/**
+ * Adds one deposit per month, or two when the schedule is "twice a month" (one row per pay day, same amount).
+ * Day 31 means the last day of the month.
+ */
 export async function addIncome(_: FormState, fd: FormData): Promise<FormState> {
-  const p = z
-    .object({
-      name: z.string().min(1, "Enter a name"),
-      amountCents: cents,
-      dayOfMonth: z.coerce.number().int().min(1, "Day must be 1 to 28").max(28, "Day must be 1 to 28"),
-    })
-    .safeParse({ name: str(fd, "name"), amountCents: str(fd, "amount"), dayOfMonth: str(fd, "day") });
-  if (!p.success) return fail(p.error);
-  await withUser((db) => db.insert(income).values(p.data));
+  const parsed = parseIncome({ name: str(fd, "name"), amount: str(fd, "amount"), schedule: str(fd, "schedule"), day: str(fd, "day"), day2: str(fd, "day2") });
+  if ("error" in parsed) return { error: parsed.error };
+  await withUser((db) => db.insert(income).values(parsed.rows));
   refresh();
-  return { ok: `Added ${p.data.name}` };
+  const name = parsed.rows[0].name;
+  return { ok: parsed.rows.length === 2 ? `Added ${name} twice a month` : `Added ${name}` };
 }
 
 export async function deleteIncome(id: string) {

@@ -12,6 +12,17 @@ export type CalEvent = {
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
+/** Stored as 31 and clamped to the month's real length, so it lands on the 28th, 29th, 30th or 31st. */
+export const LAST_DAY_OF_MONTH = 31;
+
+/** "the 15th", "the last day of the month". */
+export function dayOfMonthLabel(day: number): string {
+  if (day >= LAST_DAY_OF_MONTH) return "the last day of the month";
+  const mod100 = day % 100;
+  const suffix = mod100 >= 11 && mod100 <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[day % 10] ?? "th";
+  return `the ${day}${suffix}`;
+}
+
 /** Everything that happens in one month: income, payments already made, and payments still to come or overdue. */
 export function monthEvents(bundles: CalBundle[], income: IncomeLike[], month: string, today: string): CalEvent[] {
   const events: CalEvent[] = [];
