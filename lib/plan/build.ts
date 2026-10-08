@@ -1,7 +1,7 @@
 import { daysBetween, todayISO } from "../dates";
 import type { Income, Negotiation, Offer, Stage, TaxItem } from "../db/schema";
 import { monthlyObligation } from "../finance";
-import { isTaxDebtType } from "../labels";
+import { isSupportDebtType, isTaxDebtType } from "../labels";
 import { buildReminders, isTimeSensitive } from "../negotiation";
 import type { DebtFull } from "../queries";
 import { pendingTaxCount, taxFlags } from "../tax";
@@ -63,12 +63,17 @@ export function buildPlan(i: PlanInput): Plan {
   for (const d of open) {
     if (d.settlement) {
       simDebts.push({ id: d.debt.id, name: d.debt.name, balanceCents: d.owed, aprBps: 0, minPaymentCents: Math.min(d.settlement.installmentCents, d.owed), fixed: true });
-    } else if (d.debt.rateBps != null && d.debt.monthlyPaymentCents) {
-      simDebts.push({ id: d.debt.id, name: d.debt.name, balanceCents: d.owed, aprBps: d.debt.rateBps, minPaymentCents: d.debt.monthlyPaymentCents });
+    } else if ((d.debt.rateBps != null || isSupportDebtType(d.debt.type)) && d.debt.monthlyPaymentCents) {
+      // Support arrears usually carry no rate, so a missing rate counts as 0% for them.
+      simDebts.push({ id: d.debt.id, name: d.debt.name, balanceCents: d.owed, aprBps: d.debt.rateBps ?? 0, minPaymentCents: d.debt.monthlyPaymentCents });
     } else {
       excluded.push({
         name: d.debt.name,
-        reason: isTaxDebtType(d.debt.type) ? "back taxes with no payment plan entered" : d.debt.rateBps == null ? "no interest rate entered" : "no monthly payment entered",
+        reason: isTaxDebtType(d.debt.type)
+          ? "back taxes with no payment plan entered"
+          : d.debt.rateBps == null && !isSupportDebtType(d.debt.type)
+            ? "no interest rate entered"
+            : "no monthly payment entered",
       });
     }
   }

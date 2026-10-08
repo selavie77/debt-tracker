@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { compareColumn } from "./compare";
 import { DEBT_TYPES, type Debt, type Entity } from "./db/schema";
 import { balanceAt, eliminated, totalPaid } from "./finance";
-import { TYPE_LABEL, isTaxDebtType, parseDebtType } from "./labels";
+import { TYPE_LABEL, isSupportDebtType, isTaxDebtType, parseDebtType } from "./labels";
 import type { DebtFull } from "./queries";
 import { taxFlags } from "./tax";
 
@@ -22,8 +22,30 @@ describe("debt types", () => {
   });
 });
 
+describe("support debt types", () => {
+  it("has labels that say the amount is past due", () => {
+    expect(TYPE_LABEL.child_support).toBe("Child support (past due)");
+    expect(TYPE_LABEL.alimony).toBe("Alimony (past due)");
+  });
+  it("recognizes both as support, and nothing else", () => {
+    expect(isSupportDebtType("child_support")).toBe(true);
+    expect(isSupportDebtType("alimony")).toBe(true);
+    expect(isSupportDebtType("federal_tax")).toBe(false);
+    expect(isSupportDebtType("personal_loan")).toBe(false);
+  });
+  it("does not treat support as a tax debt", () => {
+    expect(isTaxDebtType("child_support")).toBe(false);
+  });
+});
+
 describe("parsing imported types", () => {
   it.each([
+    ["Child support", "child_support"],
+    ["back child support", "child_support"],
+    ["Child support (past due)", "child_support"],
+    ["alimony", "alimony"],
+    ["Spousal support", "alimony"],
+    ["Alimony (past due)", "alimony"],
     ["Federal back taxes", "federal_tax"],
     ["federal_tax", "federal_tax"],
     ["Federal tax", "federal_tax"],
@@ -69,6 +91,12 @@ describe("where the new types change behavior", () => {
   it("auto loans and mortgages get a secured-debt check even without collateral text", () => {
     expect(compareColumn(full("auto_loan", null), null, "2026-10-05").checks.join(" ")).toMatch(/repossession/);
     expect(compareColumn(full("mortgage", null), null, "2026-10-05").checks.join(" ")).toMatch(/foreclosure/);
+  });
+  it("past-due support is never flagged as forgiven-debt income, even if reduced", () => {
+    expect(taxFlags([full("child_support", 300_000), full("alimony", 300_000)])).toEqual([]);
+  });
+  it("support gets a court-order check on Compare", () => {
+    expect(compareColumn(full("child_support", null), null, "2026-10-05").checks.join(" ")).toMatch(/court orders.*modification/);
   });
   it("back taxes point to the agency's own guidance", () => {
     expect(compareColumn(full("other_tax", null), null, "2026-10-05").checks.join(" ")).toMatch(/agency/);

@@ -4,6 +4,8 @@ export const TYPE_LABEL: Record<DebtType, string> = {
   federal_tax: "Federal back taxes",
   state_tax: "State back taxes",
   other_tax: "Other back taxes (payroll, local, property)",
+  child_support: "Child support (past due)",
+  alimony: "Alimony (past due)",
   business_loan: "Business loan",
   government_loan: "Government loan",
   credit_card: "Credit card",
@@ -22,12 +24,22 @@ export function isTaxDebtType(type: DebtType): boolean {
   return type === "federal_tax" || type === "state_tax" || type === "other_tax";
 }
 
+/**
+ * Past-due child support or alimony. These are court orders, not loans: they have no lender, are not
+ * "forgiven debt" for tax purposes, and generally cannot be changed without the court or support agency.
+ */
+export function isSupportDebtType(type: DebtType): boolean {
+  return type === "child_support" || type === "alimony";
+}
+
 // Extra wordings accepted when importing a spreadsheet, besides each type's id and label.
 const TYPE_ALIASES: Record<string, DebtType> = {
   "federal tax": "federal_tax", "federal taxes": "federal_tax", "federal back tax": "federal_tax", irs: "federal_tax",
   "state tax": "state_tax", "state taxes": "state_tax", "state back tax": "state_tax",
   "payroll tax": "other_tax", "payroll taxes": "other_tax", "back taxes": "other_tax", "back tax": "other_tax",
   "property tax": "other_tax", "local tax": "other_tax",
+  "child support": "child_support", "child support arrears": "child_support", "back child support": "child_support",
+  alimony: "alimony", "alimony arrears": "alimony", "spousal support": "alimony", maintenance: "alimony",
   "car loan": "auto_loan", auto: "auto_loan", "vehicle loan": "auto_loan",
   "medical debt": "medical", heloc: "line_of_credit", secured: "secured",
 };

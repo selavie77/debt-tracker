@@ -69,6 +69,11 @@ describe("labels and presets", () => {
     for (const c of EXPENSE_CATEGORIES) expect(CATEGORY_LABEL[c]).toBeTruthy();
     for (const f of EXPENSE_FREQUENCIES) expect(FREQUENCY_LABEL[f]).toBeTruthy();
   });
+  it("offers child support and alimony as current payments", () => {
+    expect(CATEGORY_LABEL.support).toMatch(/Child support and alimony/);
+    const names = PRESETS.filter((p) => p.category === "support").map((p) => p.name);
+    expect(names).toEqual(["Child support", "Alimony / spousal support"]);
+  });
   it("only offers presets that use real categories and frequencies", () => {
     for (const p of PRESETS) {
       expect(EXPENSE_CATEGORIES).toContain(p.category);

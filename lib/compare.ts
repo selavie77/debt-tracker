@@ -1,6 +1,6 @@
 import { daysBetween, todayISO } from "./dates";
 import { amortize } from "./finance";
-import { TYPE_LABEL, isTaxDebtType } from "./labels";
+import { TYPE_LABEL, isSupportDebtType, isTaxDebtType } from "./labels";
 import { usdWhole } from "./money";
 import type { DebtFull } from "./queries";
 
@@ -42,6 +42,9 @@ export function compareColumn(d: DebtFull, stage: string | null, today = todayIS
   const daysLate = debt.delinquentSince && d.owed > 0 ? Math.max(0, daysBetween(debt.delinquentSince, today)) : 0;
 
   const checks: string[] = [];
+  if (isSupportDebtType(debt.type)) {
+    checks.push("Support orders are court orders. Changes generally need court or agency approval and usually apply only going forward. Ask about a modification if your income has changed.");
+  }
   if (isTaxDebtType(debt.type)) {
     checks.push("Tax debts have their own payment and compromise rules. Read the agency's official guidance.");
   }

@@ -13,6 +13,7 @@ export const CATEGORY_LABEL: Record<ExpenseCategory, string> = {
   insurance: "Insurance",
   health: "Health and medical",
   family: "Family and childcare",
+  support: "Child support and alimony (current payments)",
   personal: "Personal and other",
 };
 
@@ -39,6 +40,9 @@ export const PRESETS: { name: string; category: ExpenseCategory; frequency: Expe
   { name: "Groceries", category: "food", frequency: "weekly" },
   { name: "Health insurance", category: "insurance", frequency: "monthly" },
   { name: "Medications", category: "health", frequency: "monthly" },
+  { name: "Child support", category: "support", frequency: "monthly" },
+  { name: "Alimony / spousal support", category: "support", frequency: "monthly" },
+  { name: "Childcare", category: "family", frequency: "monthly" },
 ];
 
 /** What a cost comes to in an average month. Weekly is 52 a year and every-two-weeks is 26 a year. */

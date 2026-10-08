@@ -26,6 +26,8 @@ export const DEBT_TYPES = [
   "federal_tax", // shown as "Federal back taxes"
   "state_tax", // shown as "State back taxes"
   "other_tax", // payroll, local, property and other back taxes
+  "child_support", // past-due child support
+  "alimony", // past-due alimony / spousal support
   "business_loan",
   "government_loan",
   "credit_card",
@@ -268,6 +270,7 @@ export const EXPENSE_CATEGORIES = [
   "insurance",
   "health",
   "family",
+  "support", // current child support and alimony payments
   "personal",
 ] as const;
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];

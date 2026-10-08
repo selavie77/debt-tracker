@@ -42,6 +42,37 @@ describe("consequence tiers", () => {
   });
 });
 
+const support = mk({ name: "Back child support", type: "child_support", delinquentSince: "2026-06-01", monthlyPaymentCents: 20_000, originalCents: 800_000 });
+
+describe("past-due support", () => {
+  it("is in the highest-consequence tier", () => {
+    expect(consequenceTier(support.debt)).toBe(1);
+    expect(consequenceTier(mk({ type: "alimony" }).debt)).toBe(1);
+  });
+  it("gets options about the court order and modification, not loan-style settlement advice", () => {
+    const p = priorities([support], new Map(), TODAY)[0];
+    const text = p.options.join(" ");
+    expect(text).toMatch(/court orders/);
+    expect(text).toMatch(/modifying the order/);
+    expect(text).toMatch(/family-law attorney/);
+    expect(text).not.toMatch(/settlement options/);
+    expect(p.questions.join(" ")).toMatch(/past-due amount is on record/);
+  });
+  it("has its own did-you-know note and no forgiven-debt note", () => {
+    const settledSupport = mk({ name: "Reduced support", type: "child_support", originalCents: 900_000 }, { agreedCents: 100_000 });
+    const facts = didYouKnow([support, settledSupport], TODAY);
+    expect(facts.find((f) => f.id === "support")?.about).toContain("Back child support");
+    expect(facts.find((f) => f.id === "forgiven")).toBeUndefined();
+    expect(facts.find((f) => f.id === "support")?.text).toMatch(/generally not erased by bankruptcy/);
+  });
+  it("never uses banned advice wording", () => {
+    const banned = /stop paying|ignore|don't pay|do not pay|you should|you must|we recommend|skip (the )?payment|default on/i;
+    const p = priorities([support], new Map(), TODAY)[0];
+    const all = [...p.facts, ...p.options, ...p.questions, ...didYouKnow([support], TODAY).map((f) => f.text)].join("\n");
+    expect(all).not.toMatch(banned);
+  });
+});
+
 describe("priorities", () => {
   const list = priorities(all, new Map(), TODAY);
   it("skips paid debts and orders by tier, then lateness, then interest", () => {

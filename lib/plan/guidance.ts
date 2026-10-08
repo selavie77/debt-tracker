@@ -1,6 +1,6 @@
 import { daysBetween, todayISO } from "../dates";
 import type { Debt, Stage } from "../db/schema";
-import { TYPE_LABEL, isTaxDebtType } from "../labels";
+import { TYPE_LABEL, isSupportDebtType, isTaxDebtType } from "../labels";
 import { rateLabel, usdWhole } from "../money";
 import { STAGE_LABEL, isTimeSensitive, type Reminder } from "../negotiation";
 import type { DebtFull } from "../queries";
@@ -18,7 +18,7 @@ export type Tier = 1 | 2 | 3;
 export const TIER_INFO: Record<Tier, { label: string; reason: string }> = {
   1: {
     label: "Strongest collection powers",
-    reason: "Back taxes, government-backed loans, and loans secured by a home or vehicle can usually be collected, or the collateral taken, without first winning a court case.",
+    reason: "Back taxes, past-due support, government-backed loans, and loans secured by a home or vehicle can usually be collected, or the collateral taken, without first winning a new court case.",
   },
   2: {
     label: "Secured or personally guaranteed",
@@ -32,7 +32,7 @@ export const TIER_INFO: Record<Tier, { label: string; reason: string }> = {
 
 /** A general pattern, not a legal ruling. Used only to order the list and explain why. */
 export function consequenceTier(debt: Pick<Debt, "type" | "government" | "collateral" | "personalGuarantee">): Tier {
-  if (isTaxDebtType(debt.type) || debt.government || debt.type === "mortgage" || debt.type === "auto_loan") return 1;
+  if (isTaxDebtType(debt.type) || isSupportDebtType(debt.type) || debt.government || debt.type === "mortgage" || debt.type === "auto_loan") return 1;
   if (debt.collateral || debt.type === "secured" || debt.personalGuarantee) return 2;
   return 3;
 }
@@ -62,6 +62,7 @@ export function priorities(debts: DebtFull[], stageByDebt: Map<string, Stage>, t
     const interestPerYear = !settlement && rate != null ? Math.round((d.owed * rate) / 10000) : null;
     const stage = stageByDebt.get(debt.id);
     const isTax = isTaxDebtType(debt.type);
+    const isSupport = isSupportDebtType(debt.type);
     const secured = debt.type === "mortgage" || debt.type === "auto_loan" || debt.type === "secured" || Boolean(debt.collateral);
 
     const facts = [`${usdWhole(d.owed)} owed${rate != null && !settlement ? ` at ${rateLabel(rate)}` : ""}.`];
@@ -75,7 +76,14 @@ export function priorities(debts: DebtFull[], stageByDebt: Map<string, Stage>, t
     if (settlement) {
       options.push("Keep to the agreed schedule.", "Keep the written agreement and a receipt for every payment.");
     } else {
-      if (isTax) options.push("Look at the agency's payment plans and compromise programs, and what they require.", "Ask a tax professional what you may qualify for.");
+      if (isSupport) {
+        options.push(
+          "Child support and alimony are court orders, so a change generally needs the court or the support agency to approve it.",
+          "If your income or circumstances have changed, ask about modifying the order. A change usually applies only from the date you ask, not backward.",
+          "Ask about a payment plan for the past-due amount.",
+          "A family-law attorney, or a legal aid office, can explain what applies in your state.",
+        );
+      } else if (isTax) options.push("Look at the agency's payment plans and compromise programs, and what they require.", "Ask a tax professional what you may qualify for.");
       else if (debt.government) options.push("Check the agency's own hardship or modification programs and their eligibility rules.", "Ask what changes if you fall further behind.");
       else if (secured) options.push("Ask the lender about modification, deferral or refinancing, ideally before falling further behind.", "Read what your contract says happens after a default.");
       else if (daysLate > 0) options.push("Ask the creditor what hardship, payment-plan or settlement options exist.", "Get any agreement confirmed in writing before you pay.");
@@ -85,6 +93,7 @@ export function priorities(debts: DebtFull[], stageByDebt: Map<string, Stage>, t
     }
 
     const questions = ["What is the exact payoff amount today, including interest and fees?"];
+    if (isSupport) questions.push("What does the order require, and what past-due amount is on record?");
     if (!settlement) questions.push("What options exist for someone in my situation?");
     if (isTax) questions.push("What does the agency need from me to review a payment plan or compromise?");
     if (secured && !settlement) questions.push("What happens, step by step, if I miss another payment?");
@@ -116,6 +125,9 @@ export function didYouKnow(debts: DebtFull[], today = todayISO()): Fact[] {
   add("state", "States have payment options too",
     "Many states offer payment plans, and some offer compromise programs. Rules and eligibility differ by state, so check your state tax department.",
     open.filter((d) => d.debt.type === "state_tax" || d.debt.type === "other_tax"));
+  add("support", "Support orders are enforced differently",
+    "Child support and alimony are court orders. States can collect past-due support through wage withholding, tax refund interception and license suspension, and it is generally not erased by bankruptcy. Changes usually have to be approved by the court or support agency and typically apply only going forward, so it helps to ask about a modification early if your income has dropped.",
+    open.filter((d) => isSupportDebtType(d.debt.type)));
   add("payroll", "Unpaid payroll taxes can be personal",
     "Unpaid payroll taxes can make the people responsible for them personally liable, not just the business. Ask a tax professional how this applies to you.",
     open.filter((d) => d.debt.type === "other_tax"));
@@ -141,7 +153,7 @@ export function didYouKnow(debts: DebtFull[], today = todayISO()): Fact[] {
     open.filter((d) => d.settlement || d.debt.status === "negotiating"));
   add("forgiven", "Forgiven debt can be taxable",
     `Forgiven debt can count as taxable income, with exceptions such as insolvency. Creditors generally send a Form 1099-C for ${usdWhole(FORM_THRESHOLD_CENTS)} or more. The Tax review page lists yours.`,
-    debts.filter((d) => d.settlement && d.eliminated >= FORM_THRESHOLD_CENTS && !isTaxDebtType(d.debt.type)));
+    debts.filter((d) => d.settlement && d.eliminated >= FORM_THRESHOLD_CENTS && !isTaxDebtType(d.debt.type) && !isSupportDebtType(d.debt.type)));
   return out;
 }
 

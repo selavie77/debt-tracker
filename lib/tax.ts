@@ -1,6 +1,6 @@
 import type { DebtFull } from "./queries";
 import { settlementSchedule } from "./finance";
-import { isTaxDebtType } from "./labels";
+import { isSupportDebtType, isTaxDebtType } from "./labels";
 
 // Tracks which settled debts may have tax consequences so they are not forgotten.
 // This is a reminder list, not tax advice. Rules differ by debt type, entity, state and the
@@ -26,6 +26,7 @@ export function taxFlags(debts: DebtFull[]): TaxFlag[] {
   const out: TaxFlag[] = [];
   for (const d of debts) {
     if (!d.settlement || d.eliminated <= 0) continue;
+    if (isSupportDebtType(d.debt.type)) continue; // support is not a loan, so there is no forgiven-debt income to flag
     const sched = settlementSchedule(d.settlement);
     const lastScheduled = sched[sched.length - 1]?.date ?? d.settlement.firstPaymentOn;
     const paidOff = d.owed <= 0;
