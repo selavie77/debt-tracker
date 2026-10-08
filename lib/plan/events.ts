@@ -2,8 +2,7 @@ import { shiftMonth } from "../calendar";
 import { toCents } from "../money";
 
 // One-time money the user expects: selling a property, a tax refund, a large bill.
-// The plan counts amount x confidence for the cash. An event can also pay off named debts. That only happens in the
-// "everything goes well" view, because a debt is either paid off or it is not.
+// An event can also pay off named debts. When it happens, their payments stop from the next month.
 
 export type EventLike = {
   direction: "in" | "out";
@@ -16,12 +15,47 @@ export type EventLike = {
 
 const sign = (e: EventLike) => (e.direction === "in" ? 1 : -1);
 
-/** Signed amount at the confidence given: money in is positive, money out is negative. */
-export const expectedEventCents = (e: EventLike): number => sign(e) * Math.round((e.amountCents * Math.min(100, Math.max(0, e.confidencePercent))) / 100);
-
-/** Signed amount if it happens in full. */
+/** Signed amount if it happens in full: money in is positive, money out is negative. */
 export const fullEventCents = (e: EventLike): number => sign(e) * e.amountCents;
 
+/**
+ * Does the plan count it as happening when it counts "what you expect"? A one-time event either happens or it does not,
+ * so it is not scaled by confidence. Money in counts when you are at least 50% sure. Money out counts from 25%, so a
+ * possible bill is not ignored. The best-case view counts every event.
+ */
+export const HAPPENS_AT = { in: 50, out: 25 } as const;
+export const happensInExpected = (e: EventLike): boolean => e.confidencePercent >= HAPPENS_AT[e.direction];
+
+/** Signed amount counted in the "what you expect" view: the full amount, or nothing. */
+export const expectedEventCents = (e: EventLike): number => (happensInExpected(e) ? fullEventCents(e) : 0);
+
+export type Payoff = { debtId: string; costCents: number };
+
+/**
+ * Pays off debts, in the order given, for as long as each one fits in the money that is left. A debt that does not fit is
+ * left alone and the next one is tried. Debts already paid off by an earlier event are skipped.
+ */
+export function allocatePayoffs(
+  amountCents: number,
+  orderedDebtIds: string[],
+  costFor: (debtId: string) => number,
+  alreadyPaid: ReadonlySet<string> = new Set(),
+): { paid: Payoff[]; notCovered: Payoff[]; leftCents: number } {
+  let remaining = amountCents;
+  const paid: Payoff[] = [];
+  const notCovered: Payoff[] = [];
+  for (const debtId of orderedDebtIds) {
+    if (alreadyPaid.has(debtId)) continue;
+    const costCents = costFor(debtId);
+    if (costCents <= remaining) {
+      paid.push({ debtId, costCents });
+      remaining -= costCents;
+    } else {
+      notCovered.push({ debtId, costCents });
+    }
+  }
+  return { paid, notCovered, leftCents: remaining };
+}
 export const eventsInMonth = <T extends EventLike>(events: T[], month: string): T[] => events.filter((e) => e.expectedMonth.slice(0, 7) === month);
 
 export type EventInput = { name: string; direction: string; amount: string; month: string; confidence: string; note?: string; debtIds?: string[] };

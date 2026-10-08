@@ -1,5 +1,5 @@
 import { shiftMonth } from "../calendar";
-import { eventsInMonth, expectedEventCents, fullEventCents, type EventLike } from "./events";
+import { allocatePayoffs, eventsInMonth, happensInExpected, type EventLike, type Payoff } from "./events";
 
 // Income for planning. Paychecks are steady. Business income is a forecast: an amount, how much to count on it
 // (confidence), and which months it applies to. The plan counts amount x confidence.
@@ -17,8 +17,15 @@ export type IncomeView = "steady" | "expected" | "full";
 
 export const VIEW_LABEL: Record<IncomeView, string> = {
   steady: "Paychecks only",
-  expected: "Paychecks plus the business at your confidence",
-  full: "Paychecks plus the business at full amount",
+  expected: "What you expect",
+  full: "Best case",
+};
+
+/** What each view counts, in words. */
+export const VIEW_DESCRIPTION: Record<IncomeView, string> = {
+  steady: "Paychecks only. No business income and no one-time events.",
+  expected: "Paychecks, plus the business at your confidence, plus one-time events you are sure enough of (money in at 50% or more, money out at 25% or more), in full.",
+  full: "Paychecks, plus the business at its full amount, plus every one-time event, in full.",
 };
 
 const confidenceOf = (r: IncomeRowLike) => Math.min(100, Math.max(0, r.confidencePercent ?? 100));
@@ -88,6 +95,7 @@ export function breakEvenFromVariable(s: IncomeScenarios, livingCents: number | 
 }
 
 
+
 type Triple = { steady: number; expected: number; full: number };
 
 export type OutlookMonth = {
@@ -96,20 +104,21 @@ export type OutlookMonth = {
   expectedCents: number;
   fullCents: number;
   livingCents: number;
-  /** Scheduled debt payments. They only differ in "full", where debts an event pays off stop being paid. */
+  /** Scheduled debt payments. They fall in "expected" and "full" once an event pays a debt off. */
   obligations: Triple;
-  /** One-time money this month. Paychecks-only counts none. "Expected" counts the cash at your confidence. "Full" counts it in full, less what it pays off. */
+  /** One-time money this month, after what it pays off. Paychecks-only counts none. */
   events: Triple;
   /** What the month leaves from income after living costs and debt payments, not counting one-time money. */
   left: Triple;
   /** Cash after this month: the starting cash plus every month's leftover and one-time money so far. */
   balance: Triple;
-  /** Debts paid off this month in the "full" view. */
-  paidOffFull: { debtId: string; costCents: number }[];
+  /** Debts paid off this month, in each view. */
+  paidOff: { expected: Payoff[]; full: Payoff[] };
 };
 
 export type OutlookOptions = {
   rows: IncomeRowLike[];
+  /** Events. Each one's payoffDebtIds should already be in the order to pay them. */
   events: EventLike[];
   startMonth: string;
   months: number;
@@ -123,37 +132,38 @@ export type OutlookOptions = {
 
 /**
  * Month by month. Debt payments come from `obligationsFor`, which knows when settlements end, so the picture improves as
- * debts finish. Living costs are held constant. One-time events land in their month, and a running cash balance shows
- * whether the money lasts. In the "full" view an event also pays off the debts it names, and their monthly payments
- * stop from the next month.
+ * debts finish. Living costs are held constant. One-time events land in their month and a running cash balance shows
+ * whether the money lasts. When an event happens it pays off the debts it names, in order, for as long as the money
+ * covers them, and those debts' payments stop from the next month. "Expected" counts the events you are sure enough of
+ * and "full" counts all of them. "Steady" counts none.
  */
 export function outlook(o: OutlookOptions): OutlookMonth[] {
   const cash = o.cashCents ?? 0;
   const running: Triple = { steady: cash, expected: cash, full: cash };
-  const paid = new Set<string>(); // debts paid off so far in the "full" view
+  const paid = { expected: new Set<string>(), full: new Set<string>() }; // debts paid off so far in each view
   const none: ReadonlySet<string> = new Set();
 
   return Array.from({ length: o.months }, (_, i) => {
     const month = shiftMonth(o.startMonth, i);
     const s = incomeScenarios(o.rows, month);
     const base = o.obligationsFor(month, none);
-    const obligations: Triple = { steady: base, expected: base, full: o.obligationsFor(month, paid) };
+    const obligations: Triple = { steady: base, expected: o.obligationsFor(month, paid.expected), full: o.obligationsFor(month, paid.full) };
 
     const inMonth = eventsInMonth(o.events, month);
-    const paidOffFull: { debtId: string; costCents: number }[] = [];
-    let fullEvents = 0;
-    for (const e of inMonth) {
-      fullEvents += fullEventCents(e);
-      if (e.direction === "in") {
-        for (const id of e.payoffDebtIds ?? []) {
-          if (paid.has(id) || paidOffFull.some((p) => p.debtId === id)) continue;
-          const costCents = o.payoffCostFor(id, month);
-          paidOffFull.push({ debtId: id, costCents });
-          fullEvents -= costCents;
+    const events: Triple = { steady: 0, expected: 0, full: 0 };
+    const paidOff = { expected: [] as Payoff[], full: [] as Payoff[] };
+    for (const view of ["expected", "full"] as const) {
+      for (const e of inMonth) {
+        if (view === "expected" && !happensInExpected(e)) continue;
+        if (e.direction === "out") {
+          events[view] -= e.amountCents;
+          continue;
         }
+        const a = allocatePayoffs(e.amountCents, e.payoffDebtIds ?? [], (id) => o.payoffCostFor(id, month), new Set([...paid[view], ...paidOff[view].map((p) => p.debtId)]));
+        paidOff[view].push(...a.paid);
+        events[view] += a.leftCents;
       }
     }
-    const events: Triple = { steady: 0, expected: inMonth.reduce((t, e) => t + expectedEventCents(e), 0), full: fullEvents };
 
     const left: Triple = {
       steady: s.steadyCents - o.livingCents - obligations.steady,
@@ -161,9 +171,9 @@ export function outlook(o: OutlookOptions): OutlookMonth[] {
       full: s.steadyCents + s.fullCents - o.livingCents - obligations.full,
     };
     for (const v of ["steady", "expected", "full"] as const) running[v] += left[v] + events[v];
-    for (const p of paidOffFull) paid.add(p.debtId); // their payments stop from next month
+    for (const view of ["expected", "full"] as const) for (const p of paidOff[view]) paid[view].add(p.debtId); // their payments stop from next month
 
-    return { month, steadyCents: s.steadyCents, expectedCents: s.expectedCents, fullCents: s.fullCents, livingCents: o.livingCents, obligations, events, left, balance: { ...running }, paidOffFull };
+    return { month, steadyCents: s.steadyCents, expectedCents: s.expectedCents, fullCents: s.fullCents, livingCents: o.livingCents, obligations, events, left, balance: { ...running }, paidOff };
   });
 }
 

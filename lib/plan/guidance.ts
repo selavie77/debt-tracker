@@ -307,7 +307,20 @@ export type StoryInput = {
   /** The month-by-month cash picture, when living costs are known. */
   outlook?: { months: number; runsOutMonth: string | null; cashStartCents: number; view: IncomeView };
   /** Expected one-time events that pay off debts. */
-  events?: { name: string; month: string; amountCents: number; payoffNames: string[]; payoffTotalCents: number; proceedsAfterCents: number; monthlyFreedCents: number }[];
+  events?: {
+    name: string;
+    month: string;
+    amountCents: number;
+    payoffNames: string[];
+    payoffTotalCents: number;
+    proceedsAfterCents: number;
+    monthlyFreedCents: number;
+    /** Debts it was meant to pay off but the money does not reach, and how much more it would take. */
+    notCoveredNames: string[];
+    shortByCents: number;
+    /** Is it counted as happening in the view being shown? */
+    counted: boolean;
+  }[];
 };
 
 /** "March 2027" from "2027-03". */
@@ -340,7 +353,7 @@ export function buildStory(s: StoryInput): string[] {
     const c = s.scenario;
     const counted =
       c.view === "steady" ? "only your paychecks, not the business"
-      : c.view === "expected" ? `the business at your confidence (${usdWhole(c.expectedCents)} of ${usdWhole(c.fullCents)} a month)`
+      : c.view === "expected" ? `the business at your confidence (${usdWhole(c.expectedCents)} of ${usdWhole(c.fullCents)} a month) and the one-time events you are sure enough of`
       : `the business at its full amount (${usdWhole(c.fullCents)} a month)`;
     out.push(`Business income is not certain, so this plan counts ${counted}.`);
     if (c.steadySurplus != null && c.expectedSurplus != null && c.fullSurplus != null) {
@@ -359,9 +372,15 @@ export function buildStory(s: StoryInput): string[] {
     }
   }
   for (const e of s.events ?? []) {
+    const when = `If ${e.name} comes through in ${monthLabel(e.month)} (${usdWhole(e.amountCents)})`;
+    const gap = e.notCoveredNames.length ? ` It would not also cover ${listNames(e.notCoveredNames)}, which falls about ${usdWhole(e.shortByCents)} short.` : "";
+    if (e.payoffNames.length === 0) {
+      out.push(`${when}, it would not cover ${listNames(e.notCoveredNames)}, which falls about ${usdWhole(e.shortByCents)} short.`);
+      continue;
+    }
     out.push(
-      `If ${e.name} comes through in ${monthLabel(e.month)} (${usdWhole(e.amountCents)}), it would pay off ${listNames(e.payoffNames)} for about ${usdWhole(e.payoffTotalCents)}, ` +
-        `leave about ${usdWhole(Math.max(0, e.proceedsAfterCents))}${e.proceedsAfterCents < 0 ? " (it falls short of the payoffs)" : ""}, and stop about ${usdWhole(e.monthlyFreedCents)} a month in payments.`,
+      `${when}, it would pay off ${listNames(e.payoffNames)} for about ${usdWhole(e.payoffTotalCents)}, leave about ${usdWhole(Math.max(0, e.proceedsAfterCents))}, ` +
+        `and stop about ${usdWhole(e.monthlyFreedCents)} a month in payments.${gap}${e.counted ? "" : " This view does not count it, because you are not sure enough of it."}`,
     );
   }  if (s.costliest) out.push(`The costliest debt to carry is ${s.costliest.name}, at ${rateLabel(s.costliest.rateBps)}: about ${usdWhole(s.costliest.interestPerYearCents)} a year in interest.`);
   if (s.lateCount > 0 || s.urgentCount > 0) {

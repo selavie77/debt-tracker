@@ -28,7 +28,7 @@ export function EventForm({ debts, defaultMonth }: Props) {
       <label>Month you expect it
         <input type="month" id="ev-month" name="month" defaultValue={defaultMonth} required />
       </label>
-      <ConfidenceField idPrefix="ev" defaultValue={60} hint="How likely it is to happen in that month. The plan counts the amount times this." />
+      <ConfidenceField idPrefix="ev" defaultValue={60} hint="At 50 or more the plan counts it as happening, in full (25 or more for money going out). Below that it only counts in the best case." />
       <label className="wide">Note
         <input type="text" id="ev-note" name="note" placeholder="Net of closing costs and any tax" />
       </label>
@@ -43,7 +43,7 @@ export function EventForm({ debts, defaultMonth }: Props) {
             ))}
           </div>
           <p className="note" style={{ marginBottom: 0 }}>
-            Use the amount you expect to actually receive, after closing costs and any tax. The plan uses today&apos;s balances. The exact payoff amounts will differ, so ask each creditor for one in writing.
+            Use the amount you expect to actually receive, after closing costs and any tax. The money pays them off in the plan&apos;s own order (most serious first) for as long as it covers them. The plan uses today&apos;s balances, so ask each creditor for an exact payoff amount in writing.
           </p>
         </fieldset>
       )}

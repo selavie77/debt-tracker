@@ -208,7 +208,7 @@ describe("story", () => {
   it("explains business income: what is counted, the break-even and each case", () => {
     const scenario = { view: "expected" as const, expectedCents: 600_000, fullCents: 1_000_000, steadySurplus: -438_400, expectedSurplus: 161_600, fullSurplus: 561_600, breakEvenCents: 438_400 };
     const text = buildStory({ ...input, scenario }).join(" ");
-    expect(text).toMatch(/Business income is not certain, so this plan counts the business at your confidence \(\$6,000 of \$10,000 a month\)/);
+    expect(text).toMatch(/Business income is not certain, so this plan counts the business at your confidence \(\$6,000 of \$10,000 a month\) and the one-time events you are sure enough of/);
     expect(text).toMatch(/short by about \$4,384 a month, so the business has to bring in about \$4,384 a month to break even/);
     expect(text).toMatch(/at your confidence would leave about \$1,616 a month, and at its full amount would leave about \$5,616 a month/);
   });
@@ -227,14 +227,34 @@ describe("story", () => {
   it("describes what a property sale would pay off, leave and free up", () => {
     const text = buildStory({
       ...input,
-      events: [{ name: "Sale of the property", month: "2027-03", amountCents: 15_000_000, payoffNames: ["IRS back taxes", "State back taxes", "Auto loan"], payoffTotalCents: 7_000_000, proceedsAfterCents: 8_000_000, monthlyFreedCents: 160_000 }],
+      events: [{ name: "Sale of the property", month: "2027-03", amountCents: 15_000_000, payoffNames: ["IRS back taxes", "State back taxes", "Auto loan"], payoffTotalCents: 7_000_000, proceedsAfterCents: 8_000_000, monthlyFreedCents: 160_000, notCoveredNames: [], shortByCents: 0, counted: true }],
     }).join(" ");
     expect(text).toMatch(/If Sale of the property comes through in March 2027 \(\$150,000\), it would pay off IRS back taxes, State back taxes and Auto loan for about \$70,000/);
     expect(text).toMatch(/leave about \$80,000, and stop about \$1,600 a month in payments/);
+    expect(text).not.toMatch(/would not also cover/);
+    expect(text).not.toMatch(/does not count it/);
   });
-  it("says so when the proceeds fall short of the payoffs", () => {
-    const text = buildStory({ ...input, events: [{ name: "Sale", month: "2027-03", amountCents: 3_000_000, payoffNames: ["Taxes"], payoffTotalCents: 5_000_000, proceedsAfterCents: -2_000_000, monthlyFreedCents: 0 }] }).join(" ");
-    expect(text).toMatch(/falls short of the payoffs/);
+  it("says what a sale would not cover, and how far short it falls", () => {
+    const text = buildStory({
+      ...input,
+      events: [{ name: "Sale", month: "2026-11", amountCents: 15_000_000, payoffNames: ["Federal back taxes", "Car loan"], payoffTotalCents: 14_000_000, proceedsAfterCents: 1_000_000, monthlyFreedCents: 280_000, notCoveredNames: ["State back taxes"], shortByCents: 1_000_000, counted: true }],
+    }).join(" ");
+    expect(text).toMatch(/pay off Federal back taxes and Car loan for about \$140,000, leave about \$10,000, and stop about \$2,800 a month/);
+    expect(text).toMatch(/It would not also cover State back taxes, which falls about \$10,000 short\./);
+  });
+  it("says so when the money does not cover anything it names", () => {
+    const text = buildStory({
+      ...input,
+      events: [{ name: "Sale", month: "2026-11", amountCents: 5_000_000, payoffNames: [], payoffTotalCents: 0, proceedsAfterCents: 5_000_000, monthlyFreedCents: 0, notCoveredNames: ["Federal back taxes"], shortByCents: 6_500_000, counted: true }],
+    }).join(" ");
+    expect(text).toMatch(/it would not cover Federal back taxes, which falls about \$65,000 short/);
+  });
+  it("says when the view being shown does not count the event", () => {
+    const text = buildStory({
+      ...input,
+      events: [{ name: "Sale", month: "2026-11", amountCents: 15_000_000, payoffNames: ["Auto loan"], payoffTotalCents: 2_500_000, proceedsAfterCents: 12_500_000, monthlyFreedCents: 60_000, notCoveredNames: [], shortByCents: 0, counted: false }],
+    }).join(" ");
+    expect(text).toMatch(/This view does not count it, because you are not sure enough of it/);
   });  it("prompts for missing income or living costs", () => {
     expect(buildStory({ ...input, monthlyIncomeCents: null, extra: null }).join(" ")).toMatch(/Add your income/);
     expect(buildStory({ ...input, livingCostsCents: null }).join(" ")).toMatch(/Add your monthly living costs/);

@@ -1,15 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { eventsInMonth, expectedEventCents, fullEventCents, monthsBetween, parseEvent, type EventLike } from "./events";
+import { allocatePayoffs, eventsInMonth, expectedEventCents, fullEventCents, happensInExpected, monthsBetween, parseEvent, type EventLike } from "./events";
 import { evaluatePayoffs, suggestPayoffs, type PayoffCandidate } from "./payoff";
 
 const sale: EventLike = { direction: "in", amountCents: 15_000_000, expectedMonth: "2027-03-01", confidencePercent: 60 };
 
 describe("one-time events", () => {
-  it("counts money in at your confidence, and money out the same way with a minus sign", () => {
-    expect(expectedEventCents(sale)).toBe(9_000_000);
-    expect(fullEventCents(sale)).toBe(15_000_000);
-    expect(expectedEventCents({ ...sale, direction: "out", amountCents: 500_000, confidencePercent: 100 })).toBe(-500_000);
-    expect(fullEventCents({ ...sale, direction: "out", amountCents: 500_000 })).toBe(-500_000);
+  it("counts money in as happening, in full, from 50% sure, and not at all below that", () => {
+    expect(happensInExpected({ ...sale, confidencePercent: 50 })).toBe(true);
+    expect(happensInExpected({ ...sale, confidencePercent: 49 })).toBe(false);
+    expect(expectedEventCents(sale)).toBe(15_000_000); // 60% sure: counted in full, not scaled
+    expect(expectedEventCents({ ...sale, confidencePercent: 30 })).toBe(0);
+  });
+  it("counts money going out from 25% sure, so a possible bill is not ignored", () => {
+    const bill: EventLike = { ...sale, direction: "out", amountCents: 500_000 };
+    expect(happensInExpected({ ...bill, confidencePercent: 25 })).toBe(true);
+    expect(happensInExpected({ ...bill, confidencePercent: 24 })).toBe(false);
+    expect(expectedEventCents({ ...bill, confidencePercent: 40 })).toBe(-500_000);
+    expect(fullEventCents(bill)).toBe(-500_000);
+  });
+  it("the full amount counts whatever the confidence", () => {
+    expect(fullEventCents({ ...sale, confidencePercent: 5 })).toBe(15_000_000);
   });
   it("finds events by month", () => {
     expect(eventsInMonth([sale], "2027-03")).toHaveLength(1);
@@ -21,6 +31,31 @@ describe("one-time events", () => {
   });
 });
 
+describe("paying debts off from money that may not cover them all", () => {
+  const costs: Record<string, number> = { fed: 11_500_000, state: 2_000_000, car: 2_500_000 };
+  const cost = (id: string) => costs[id];
+  it("pays in the order given while each one fits, and reports what is left", () => {
+    const r = allocatePayoffs(15_000_000, ["fed", "car", "state"], cost);
+    expect(r.paid).toEqual([{ debtId: "fed", costCents: 11_500_000 }, { debtId: "car", costCents: 2_500_000 }]);
+    expect(r.notCovered).toEqual([{ debtId: "state", costCents: 2_000_000 }]);
+    expect(r.leftCents).toBe(1_000_000);
+  });
+  it("skips a debt that does not fit and still tries the next one", () => {
+    const r = allocatePayoffs(3_000_000, ["fed", "car", "state"], cost);
+    expect(r.paid.map((p) => p.debtId)).toEqual(["car"]);
+    expect(r.notCovered.map((p) => p.debtId)).toEqual(["fed", "state"]); // $115,000 and $20,000 do not fit in $30,000 less $25,000
+    expect(r.leftCents).toBe(500_000);
+  });
+  it("covers everything when there is enough, and nothing when there is not", () => {
+    expect(allocatePayoffs(20_000_000, ["fed", "car", "state"], cost)).toMatchObject({ notCovered: [], leftCents: 4_000_000 });
+    expect(allocatePayoffs(1_000_000, ["fed", "car", "state"], cost).paid).toEqual([]);
+  });
+  it("skips debts that an earlier event already paid off", () => {
+    const r = allocatePayoffs(15_000_000, ["fed", "car"], cost, new Set(["fed"]));
+    expect(r.paid.map((p) => p.debtId)).toEqual(["car"]);
+    expect(r.leftCents).toBe(12_500_000);
+  });
+});
 describe("parseEvent", () => {
   const ok = { name: " Sale of the property ", direction: "in", amount: "150,000", month: "2027-03", confidence: "60", note: " net of costs ", debtIds: ["tax", "auto", "tax", ""] };
   it("accepts a valid event and names the debts it pays off, once each", () => {

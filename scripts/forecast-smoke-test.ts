@@ -77,17 +77,18 @@ const check = (name: string, ok: boolean, extra = "") => {
     const sale = p.eventPlans[0];
     check("the sale would pay off the taxes and the auto loan", sale.payoffs.length === 3 && sale.payoffs.map((x) => x.name).sort().join("|") === "Auto loan|Federal back taxes|State back taxes");
     check("payoffs total about $133,000 and about $17,000 is left", sale.payoffTotalCents > 13_000_000 - 100_000 && sale.proceedsAfterCents > 1_000_000, `${usdWhole(sale.payoffTotalCents)} / ${usdWhole(sale.proceedsAfterCents)}`);
+    check("nothing is left uncovered", sale.notCovered.length === 0);
     check("the auto payment is among the payments that stop", sale.monthlyFreedCents === 45_000);
     check("the monthly picture improves the month after", (sale.monthlyLeftAfter ?? 0) - (sale.monthlyLeftBefore ?? 0) === 45_000);
     check("the sale is described in the story", /If Sale of the property comes through in April 2027/.test(p.story.join(" ")));
 
-    const full = run("full");
-    const apr = full.outlook.find((m) => m.month === "2027-04")!;
-    const may = full.outlook.find((m) => m.month === "2027-05")!;
-    check("in the full view the debts are paid off in April", apr.paidOffFull.length === 3);
-    check("their payment stops in May", may.obligations.full === may.obligations.expected - 45_000);
-    check("the expected view counts only the cash, not the payoffs", p.outlook.find((m) => m.month === "2027-04")!.events.expected === 9_000_000);
-    check("asks for exact payoff amounts in writing", p.steps.some((s) => s.id.startsWith("payoff-")));
+    // The sale is 60% sure, so the main view counts it in full and pays the debts off.
+    const apr = p.outlook.find((m) => m.month === "2027-04")!;
+    const may = p.outlook.find((m) => m.month === "2027-05")!;
+    check("in the main view the debts are paid off in April", apr.paidOff.expected.length === 3);
+    check("the whole sale counts, less what it pays off (not 60% of it)", apr.events.expected === 15_000_000 - sale.payoffTotalCents, usdWhole(apr.events.expected));
+    check("their payment stops in May in the main view", may.obligations.expected === may.obligations.steady - 45_000);
+    check("paychecks only counts none of it", apr.events.steady === 0 && may.obligations.steady === apr.obligations.steady);    check("asks for exact payoff amounts in writing", p.steps.some((s) => s.id.startsWith("payoff-")));
     check("explains liens when back taxes are paid at closing", p.facts.some((f) => f.id === "lien"));
     const cal = monthEvents(data.debts.map((d) => ({ ...d, id: d.debt.id, name: d.debt.name })), data.income, "2026-11", TODAY);
     check("the business income is not placed on the calendar days, only the two paychecks", cal.filter((e) => e.kind === "income").length === 2);

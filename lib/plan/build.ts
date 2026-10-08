@@ -2,11 +2,11 @@ import { CalBundle, monthEvents, monthTotals } from "../calendar";
 import { daysBetween, todayISO } from "../dates";
 import type { Entity, Income, Negotiation, Offer, PlannedEvent, Stage, TaxItem } from "../db/schema";
 import { monthlyObligation, settlementSchedule } from "../finance";
-import { isSupportDebtType, isTaxDebtType } from "../labels";
+import { TYPE_LABEL, isSupportDebtType, isTaxDebtType } from "../labels";
 import { buildReminders, isTimeSensitive } from "../negotiation";
 import type { DebtFull } from "../queries";
 import { pendingTaxCount, taxFlags } from "../tax";
-import { shiftMonth } from "./events";
+import { allocatePayoffs, happensInExpected, shiftMonth } from "./events";
 import { buildStory, consequenceTier, didYouKnow, nextSteps, priorities, type Fact, type NextStep, type PriorityItem } from "./guidance";
 import {
   breakEvenFromVariable, cashRunsOut, expectedOf, incomeForView, incomeScenarios, outlook, parseView, surplusByView,
@@ -43,18 +43,22 @@ export type EventPlan = {
   amountCents: number;
   month: string; // YYYY-MM
   confidencePercent: number;
-  expectedCents: number; // signed, at your confidence
+  /** Is it counted as happening in the view the plan is showing? */
+  counted: boolean;
   note: string;
+  /** Debts the money covers, in the order they are paid. Empty for money going out. */
   payoffs: { debtId: string; name: string; costCents: number }[];
+  /** Debts it was meant to pay off that the money does not reach. */
+  notCovered: { debtId: string; name: string; costCents: number }[];
   payoffTotalCents: number;
-  proceedsAfterCents: number; // what is left of the event after paying those debts off
+  proceedsAfterCents: number; // what is left of the money after those payoffs
+  shortByCents: number; // how much more it would take to cover everything it was meant to pay off
   monthlyFreedCents: number; // debt payments that stop
   interestPerYearSavedCents: number;
   monthlyLeftBefore: number | null; // the month after, with those debts still being paid
   monthlyLeftAfter: number | null; // and with them gone
   suggestion: { names: string[]; usedCents: number; leftCents: number; interestPerYearSavedCents: number; monthlyFreedCents: number } | null;
 };
-
 export type ForecastRow = {
   id: string;
   name: string;
@@ -79,6 +83,8 @@ export type Plan = {
   surplusByView: SurplusByView;
   breakEvenCents: number | null; // what the business must bring in monthly, with paychecks alone
   forecasts: ForecastRow[];
+  /** Business forecasts that end inside the outlook, after which only paychecks are counted. */
+  forecastEnding: { name: string; month: string }[];
   outlook: OutlookMonth[];
   outlookMonths: number;
   runsOutMonth: string | null; // first month cash goes below zero in the chosen view
@@ -130,6 +136,17 @@ export function buildPlan(i: PlanInput): Plan {
       confidencePercent: r.confidencePercent ?? 100, expectedCents: expectedOf(r), startsOn: r.startsOn, endsOn: r.endsOn,
     }));
 
+  // How debts are named in lists: add the kind of debt when two debts share a name.
+  const nameCount = new Map<string, number>();
+  for (const d of debts) nameCount.set(d.debt.name, (nameCount.get(d.debt.name) ?? 0) + 1);
+  const nameOf = (d: DebtFull) => ((nameCount.get(d.debt.name) ?? 0) > 1 ? `${d.debt.name} (${TYPE_LABEL[d.debt.type]})` : d.debt.name);
+
+  // The order the plan lists debts in is also the order a sale pays them off.
+  const order = priorities(debts, stageByDebt, today);
+  const rank = new Map(order.map((p, idx) => [p.debtId, idx]));
+  const payoffOrder = (e: PlanEvent) =>
+    e.direction === "in" ? e.payoffDebtIds.filter((id) => byId.has(id)).sort((a, b) => (rank.get(a) ?? 9999) - (rank.get(b) ?? 9999)) : [];
+
   // What payoffs cost, and what is paid each month, in any future month.
   const none: ReadonlySet<string> = new Set();
   const obligationsFor = (month: string, paidOff: ReadonlySet<string>) =>
@@ -152,27 +169,32 @@ export function buildPlan(i: PlanInput): Plan {
 
   // Outlook.
   const months = Math.min(60, Math.max(1, i.months ?? 12));
-  const eventLikes = i.events.map((e) => ({ ...e }));
+  const eventLikes = i.events.map((e) => ({ ...e, payoffDebtIds: payoffOrder(e) }));
   const out = i.livingCostsCents == null
     ? []
     : outlook({ rows: i.income, events: eventLikes, startMonth: thisMonth, months, livingCents: i.livingCostsCents, cashCents: i.cashOnHandCents ?? 0, obligationsFor, payoffCostFor });
   const runsOutMonth = out.length ? cashRunsOut(out, view) : null;
+  const horizonEnd = shiftMonth(thisMonth, months - 1);
+  const forecastEnding = forecasts
+    .filter((f) => f.endsOn && f.endsOn.slice(0, 7) >= thisMonth && f.endsOn.slice(0, 7) < horizonEnd)
+    .map((f) => ({ name: f.name, month: shiftMonth(f.endsOn!.slice(0, 7), 1) }));
 
-  // What each expected event would do.
+  // What each event would do if it happens.
   const candidates = (excluded: Set<string>): PayoffCandidate[] =>
     open
       .filter((d) => !excluded.has(d.debt.id))
       .map((d) => ({
-        id: d.debt.id, name: d.debt.name, owedCents: d.owed, rateBps: d.debt.rateBps, monthlyCents: monthlyObligation(d, today),
+        id: d.debt.id, name: nameOf(d), owedCents: d.owed, rateBps: d.debt.rateBps, monthlyCents: monthlyObligation(d, today),
         tier: consequenceTier(d.debt), settled: Boolean(d.settlement),
       }));
   const eventPlans: EventPlan[] = [...i.events]
     .sort((a, b) => (a.expectedMonth < b.expectedMonth ? -1 : 1))
     .map((e) => {
       const month = e.expectedMonth.slice(0, 7);
-      const payoffs = e.direction === "in"
-        ? e.payoffDebtIds.filter((id) => byId.has(id)).map((id) => ({ debtId: id, name: byId.get(id)!.debt.name, costCents: payoffCostFor(id, month) }))
-        : [];
+      const alloc = allocatePayoffs(e.amountCents, payoffOrder(e), (id) => payoffCostFor(id, month));
+      const named = (p: { debtId: string; costCents: number }) => ({ debtId: p.debtId, name: nameOf(byId.get(p.debtId)!), costCents: p.costCents });
+      const payoffs = alloc.paid.map(named);
+      const notCovered = alloc.notCovered.map(named);
       const payoffTotalCents = payoffs.reduce((t, p) => t + p.costCents, 0);
       const ids = new Set(payoffs.map((p) => p.debtId));
       const freed = payoffs.reduce((t, p) => t + monthlyObligation(byId.get(p.debtId)!, today), 0);
@@ -183,19 +205,20 @@ export function buildPlan(i: PlanInput): Plan {
       const after = shiftMonth(month, 1);
       const incomeAfter = incomeForView(incomeScenarios(i.income, after), view);
       const leftWith = (paid: ReadonlySet<string>) => (i.livingCostsCents == null ? null : incomeAfter - i.livingCostsCents - obligationsFor(after, paid));
-      const proceedsAfterCents = e.amountCents - payoffTotalCents;
-      const suggest = e.direction === "in" && payoffs.length > 0 && proceedsAfterCents > 0 ? suggestPayoffs(candidates(ids), proceedsAfterCents, "rate") : null;
+      const proceedsAfterCents = e.direction === "in" ? alloc.leftCents : 0;
+      const shortByCents = Math.max(0, notCovered.reduce((t, p) => t + p.costCents, 0) - proceedsAfterCents);
+      const suggest = payoffs.length > 0 && proceedsAfterCents > 0 ? suggestPayoffs(candidates(ids), proceedsAfterCents, "rate") : null;
       return {
         id: e.id, name: e.name, direction: e.direction, amountCents: e.amountCents, month, confidencePercent: e.confidencePercent,
-        expectedCents: e.direction === "in" ? Math.round((e.amountCents * e.confidencePercent) / 100) : -Math.round((e.amountCents * e.confidencePercent) / 100),
-        note: e.note, payoffs, payoffTotalCents, proceedsAfterCents, monthlyFreedCents: freed, interestPerYearSavedCents: saved,
+        counted: view === "full" || (view === "expected" && happensInExpected(e)),
+        note: e.note, payoffs, notCovered, payoffTotalCents, proceedsAfterCents, shortByCents, monthlyFreedCents: freed, interestPerYearSavedCents: saved,
         monthlyLeftBefore: payoffs.length ? leftWith(none) : null, monthlyLeftAfter: payoffs.length ? leftWith(ids) : null,
         suggestion: suggest && suggest.ids.length
           ? { names: suggest.ids.map((id) => byId.get(id)!.debt.name), usedCents: suggest.usedCents, leftCents: suggest.leftCents, interestPerYearSavedCents: suggest.interestPerYearSavedCents, monthlyFreedCents: suggest.monthlyFreedCents }
           : null,
       };
     });
-
+  const linked = eventPlans.filter((e) => e.direction === "in" && (e.payoffs.length > 0 || e.notCovered.length > 0));
   // Simulator inputs.
   const simDebts: SimDebt[] = [];
   const excluded: { name: string; reason: string }[] = [];
@@ -245,11 +268,11 @@ export function buildPlan(i: PlanInput): Plan {
       ? { view, expectedCents: scenarios.expectedCents, fullCents: scenarios.fullCents, steadySurplus: byView.steady, expectedSurplus: byView.expected, fullSurplus: byView.full, breakEvenCents }
       : undefined,
     outlook: out.length ? { months, runsOutMonth, cashStartCents: i.cashOnHandCents ?? 0, view } : undefined,
-    events: eventPlans.filter((e) => e.payoffs.length > 0).map((e) => ({
+    events: linked.map((e) => ({
       name: e.name, month: e.month, amountCents: e.amountCents, payoffNames: e.payoffs.map((p) => p.name), payoffTotalCents: e.payoffTotalCents,
-      proceedsAfterCents: e.proceedsAfterCents, monthlyFreedCents: e.monthlyFreedCents,
-    })),
-  });
+      proceedsAfterCents: e.proceedsAfterCents, monthlyFreedCents: e.monthlyFreedCents, notCoveredNames: e.notCovered.map((p) => p.name), shortByCents: e.shortByCents,
+      counted: e.counted,
+    })),  });
 
   return {
     openCount: open.length,
@@ -264,6 +287,7 @@ export function buildPlan(i: PlanInput): Plan {
     surplusByView: byView,
     breakEvenCents,
     forecasts,
+    forecastEnding,
     outlook: out,
     outlookMonths: months,
     runsOutMonth,
@@ -271,14 +295,14 @@ export function buildPlan(i: PlanInput): Plan {
     story,
     steps: nextSteps({
       debts, stageByDebt, nextActionByDebt, reminders, incomeCount: i.income.length, livingCostsCents: i.livingCostsCents, surplusCents, taxPending, breakEvenCents,
-      runsOutMonth, view, payoffEvents: eventPlans.filter((e) => e.payoffs.length > 0 && e.month >= thisMonth).map((e) => ({ name: e.name, month: e.month, debtNames: e.payoffs.map((p) => p.name) })), today,
+      runsOutMonth, view, payoffEvents: linked.filter((e) => e.payoffs.length > 0 && e.month >= thisMonth).map((e) => ({ name: e.name, month: e.month, debtNames: e.payoffs.map((p) => p.name) })), today,
     }),
-    order: priorities(debts, stageByDebt, today),
+    order,
     facts: didYouKnow(debts, today, {
       businessIncomeNames: i.income.filter((r) => r.kind === "variable").map((r) => r.name),
-      payoffEvents: eventPlans
-        .filter((e) => e.payoffs.length > 0 && e.month >= thisMonth)
-        .map((e) => ({ name: e.name, hasTaxDebt: e.payoffs.some((p) => isTaxDebtType(byId.get(p.debtId)!.debt.type)) })),
+      payoffEvents: linked
+        .filter((e) => e.month >= thisMonth)
+        .map((e) => ({ name: e.name, hasTaxDebt: [...e.payoffs, ...e.notCovered].some((p) => isTaxDebtType(byId.get(p.debtId)!.debt.type)) })),
     }),
     simDebts,
     excluded,

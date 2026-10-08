@@ -7,8 +7,10 @@ import { PageHead } from "@/components/Bits";
 import { todayISO } from "@/lib/dates";
 import { withUser } from "@/lib/db";
 import { effectiveLivingCosts } from "@/lib/expenses";
+import { TYPE_LABEL } from "@/lib/labels";
 import { usd, usdWhole } from "@/lib/money";
 import { buildPlan } from "@/lib/plan/build";
+import { HAPPENS_AT } from "@/lib/plan/events";
 import { confidenceLabel } from "@/lib/plan/income";
 import { monthLabel } from "@/lib/plan/guidance";
 import { loadPlanData } from "@/lib/queries";
@@ -24,7 +26,12 @@ export default async function ExpectPage() {
   const month = today.slice(0, 7);
   const living = effectiveLivingCosts(data.expenses, data.settings?.livingCostsCents ?? null);
   const plan = buildPlan({ ...data, livingCostsCents: living.cents, cashOnHandCents: data.settings?.cashOnHandCents ?? null, today });
-  const openDebts = data.debts.filter((d) => d.owed > 0 && d.debt.status !== "paid").sort((a, b) => b.owed - a.owed).map((d) => ({ id: d.debt.id, name: d.debt.name, owedCents: d.owed }));
+  // Two debts can share a name (for example two years of back taxes), so add the kind of debt when they do.
+  const sameName = (n: string) => data.debts.filter((x) => x.debt.name === n).length > 1;
+  const openDebts = data.debts
+    .filter((d) => d.owed > 0 && d.debt.status !== "paid")
+    .sort((a, b) => b.owed - a.owed)
+    .map((d) => ({ id: d.debt.id, name: sameName(d.debt.name) ? `${d.debt.name} (${TYPE_LABEL[d.debt.type]})` : d.debt.name, owedCents: d.owed }));
 
   return (
     <>
@@ -80,14 +87,21 @@ export default async function ExpectPage() {
                 <div>
                   <b>{e.name}</b>
                   <span className="sub2">
-                    {e.direction === "in" ? "Money in" : "Money out"}: {usd(e.amountCents)} in {monthLabel(e.month)} at {e.confidencePercent}% confidence, so the plan counts {usd(Math.abs(e.expectedCents))}.
+                    {e.direction === "in" ? "Money in" : "Money out"}: {usd(e.amountCents)} in {monthLabel(e.month)}, {e.confidencePercent}% sure.{" "}
+                    {e.confidencePercent >= HAPPENS_AT[e.direction]
+                      ? "The plan counts it as happening, in full."
+                      : `The plan only counts it in the best case, because you are under ${HAPPENS_AT[e.direction]}% sure.`}
                   </span>
                   {e.payoffs.length > 0 && (
                     <span className="sub2">
-                      Would pay off {e.payoffs.map((p) => `${p.name} (${usdWhole(p.costCents)})`).join(", ")}. {e.proceedsAfterCents >= 0 ? `About ${usdWhole(e.proceedsAfterCents)} would be left.` : `It falls short by about ${usdWhole(-e.proceedsAfterCents)}.`}
+                      Covers {e.payoffs.map((p) => `${p.name} (${usdWhole(p.costCents)})`).join(", ")}. About {usdWhole(e.proceedsAfterCents)} would be left.
                     </span>
                   )}
-                  {e.note && <span className="sub2">{e.note}</span>}
+                  {e.notCovered.length > 0 && (
+                    <span className="sub2" style={{ color: "var(--warn)" }}>
+                      Not enough to also cover {e.notCovered.map((p) => `${p.name} (${usdWhole(p.costCents)})`).join(", ")}: about {usdWhole(e.shortByCents)} short.
+                    </span>
+                  )}                  {e.note && <span className="sub2">{e.note}</span>}
                 </div>
                 <form action={deleteEvent.bind(null, e.id)}><button className="btn danger small" type="submit">Delete</button></form>
               </div>

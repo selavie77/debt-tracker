@@ -105,30 +105,47 @@ describe("outlook", () => {
     const o = outlook({ ...base, events: [sale] });
     const jan = o[2];
     const feb = o[3];
-    it("counts the cash at your confidence, but does not pay the debts off", () => {
-      expect(jan.events.expected).toBe(10_500_000); // 70% of $150,000
+    it("when you are sure enough, counts the whole sale and pays the debts from it", () => {
+      expect(jan.events.expected).toBe(15_000_000 - 4_000_000 - 1_200_000); // $98,000 left, not 70% of $150,000
+      expect(jan.paidOff.expected.map((p) => p.debtId).sort()).toEqual(["auto", "taxes"]);
       expect(jan.events.steady).toBe(0);
-      expect(feb.obligations.expected).toBe(feb.obligations.steady); // debts still on the books
     });
-    it("in the everything-goes-well view, pays the debts from the proceeds", () => {
-      expect(jan.events.full).toBe(15_000_000 - 4_000_000 - 1_200_000); // $98,000 left
-      expect(jan.paidOffFull.map((p) => p.debtId).sort()).toEqual(["auto", "taxes"]);
+    it("their monthly payments stop from the following month, in the same view", () => {
+      expect(jan.obligations.expected).toBe(jan.obligations.steady); // paid at closing, this month's payment still counted
+      expect(feb.obligations.expected).toBe(feb.obligations.steady - 200_000); // $1,500 + $500 gone
+      expect(feb.obligations.steady).toBe(o[2].obligations.steady); // paychecks-only does not change
+      expect(feb.left.expected - feb.left.steady).toBe(200_000 + feb.expectedCents);
     });
-    it("and their monthly payments stop from the following month", () => {
-      expect(jan.obligations.full).toBe(jan.obligations.expected); // paid at closing, this month's payment still counted
-      expect(feb.obligations.full).toBe(feb.obligations.expected - 200_000); // $1,500 + $500 gone
-      expect(feb.left.full - feb.left.expected).toBe(200_000 + (feb.fullCents - feb.expectedCents));
+    it("the best case does the same", () => {
+      expect(jan.events.full).toBe(jan.events.expected);
+      expect(feb.obligations.full).toBe(feb.obligations.expected);
+    });
+    it("when you are not sure enough, only the best case counts it", () => {
+      const unsure = outlook({ ...base, events: [{ ...sale, confidencePercent: 30 }] });
+      expect(unsure[2].events.expected).toBe(0);
+      expect(unsure[2].paidOff.expected).toEqual([]);
+      expect(unsure[3].obligations.expected).toBe(unsure[3].obligations.steady);
+      expect(unsure[2].events.full).toBe(9_800_000);
+      expect(unsure[3].obligations.full).toBe(unsure[3].obligations.steady - 200_000);
     });
     it("never pays a debt off twice", () => {
-      const twice = outlook({ ...base, events: [sale, { ...sale, expectedMonth: "2027-03-01", amountCents: 1_000_000 }] });
-      expect(twice[4].paidOffFull).toEqual([]);
-      expect(twice[4].events.full).toBe(1_000_000);
+      const twice = outlook({ ...base, events: [sale, { ...sale, expectedMonth: "2027-03-01", amountCents: 1_000_000, confidencePercent: 100 }] });
+      expect(twice[4].paidOff.expected).toEqual([]);
+      expect(twice[4].events.expected).toBe(1_000_000);
     });
   });
-  it("counts money going out, and ignores payoffs on it", () => {
+  describe("a sale that cannot cover every debt it names", () => {
+    const small: EventLike = { direction: "in", amountCents: 4_500_000, expectedMonth: "2027-01-01", confidencePercent: 100, payoffDebtIds: ["taxes", "auto"] };
+    const o = outlook({ ...base, events: [small] });
+    it("pays the first one in the order given and leaves the one that does not fit", () => {
+      expect(o[2].paidOff.expected.map((p) => p.debtId)).toEqual(["taxes"]);
+      expect(o[2].events.expected).toBe(500_000); // $45,000 - $40,000
+      expect(o[3].obligations.expected).toBe(o[3].obligations.steady - 150_000); // only the taxes payment stops
+    });
+  });  it("counts money going out, and ignores payoffs on it", () => {
     const bill: EventLike = { direction: "out", amountCents: 500_000, expectedMonth: "2026-12-01", confidencePercent: 100, payoffDebtIds: ["taxes"] };
     const o = outlook({ ...base, events: [bill] });
     expect(o[1].events).toEqual({ steady: 0, expected: -500_000, full: -500_000 });
-    expect(o[1].paidOffFull).toEqual([]);
+    expect(o[1].paidOff).toEqual({ expected: [], full: [] });
   });
 });

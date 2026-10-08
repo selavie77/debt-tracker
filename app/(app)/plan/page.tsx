@@ -9,7 +9,7 @@ import { effectiveLivingCosts } from "@/lib/expenses";
 import { usdWhole } from "@/lib/money";
 import { buildPlan } from "@/lib/plan/build";
 import { DISCLAIMER, TIER_INFO, monthLabel } from "@/lib/plan/guidance";
-import { VIEW_LABEL, type IncomeView } from "@/lib/plan/income";
+import { VIEW_DESCRIPTION, VIEW_LABEL, type IncomeView } from "@/lib/plan/income";
 import { loadPlanData } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -78,9 +78,7 @@ export default async function PlanPage({ searchParams }: { searchParams: Promise
       {uncertain && (
         <div className="panel" id="income-views">
           <h2>How much to count on</h2>
-          <p className="note">
-            Some of what you expect is not certain. Pick how it is counted. The middle choice counts each expected amount times your confidence. Paychecks only shows what happens if none of it comes through.
-          </p>
+          <p className="note">{VIEW_DESCRIPTION[plan.view]}</p>
           <div className="steps" style={{ marginTop: 8 }}>
             {VIEWS.map((v) => (
               <Link key={v} href={href(v)} className={`step${plan.view === v ? " on" : ""}`} aria-current={plan.view === v ? "true" : undefined}>{VIEW_LABEL[v]}</Link>
@@ -131,24 +129,39 @@ export default async function PlanPage({ searchParams }: { searchParams: Promise
         )}
       </div>
 
-      {plan.eventPlans.filter((e) => e.payoffs.length > 0).map((e) => (
+      {plan.eventPlans.filter((e) => e.direction === "in" && (e.payoffs.length > 0 || e.notCovered.length > 0)).map((e) => (
         <div className="panel" key={e.id}>
           <h2>If {e.name} happens in {monthLabel(e.month)}</h2>
+          {!e.counted && (
+            <p className="msg" style={{ background: "var(--warn-soft)", color: "var(--warn)" }}>
+              {plan.view === "steady"
+                ? "This view counts no one-time events, so the month-by-month table below does not include it."
+                : `You are ${e.confidencePercent}% sure, so the main view does not count it. It is in the best case.`}
+            </p>
+          )}
           <div className="grid g4">
-            <Kpi label="Comes in" value={usdWhole(e.amountCents)} sub={`you are ${e.confidencePercent}% confident`} />
+            <Kpi label="Comes in" value={usdWhole(e.amountCents)} sub={`you are ${e.confidencePercent}% sure`} />
             <Kpi label="Pays off" value={usdWhole(e.payoffTotalCents)} sub={`${e.payoffs.length} ${e.payoffs.length === 1 ? "debt" : "debts"}`} />
-            <Kpi label="Left over" value={money(e.proceedsAfterCents)} sub={e.proceedsAfterCents >= 0 ? "cash after the payoffs" : "short of the payoffs"} hero={e.proceedsAfterCents > 0} />
-            <Kpi label="Payments that stop" value={`${usdWhole(e.monthlyFreedCents)}`} sub="a month, from the next month" />
+            <Kpi label="Left over" value={usdWhole(e.proceedsAfterCents)} sub="cash after the payoffs" hero={e.proceedsAfterCents > 0} />
+            <Kpi label="Payments that stop" value={usdWhole(e.monthlyFreedCents)} sub="a month, from the next month" />
           </div>
-          <div className="tablewrap" style={{ marginTop: 12 }}>
-            <table style={{ minWidth: 380 }}>
-              <thead><tr><th>Paid off at closing</th><th className="r">About</th></tr></thead>
-              <tbody>
-                {e.payoffs.map((p) => <tr key={p.debtId}><td><Link href={`/debts/${p.debtId}`}>{p.name}</Link></td><td className="r num">{usdWhole(p.costCents)}</td></tr>)}
-              </tbody>
-            </table>
-          </div>
-          {e.monthlyLeftBefore != null && e.monthlyLeftAfter != null && (
+          {e.payoffs.length > 0 && (
+            <div className="tablewrap" style={{ marginTop: 12 }}>
+              <table style={{ minWidth: 380 }}>
+                <thead><tr><th>Paid off, in this order</th><th className="r">About</th></tr></thead>
+                <tbody>
+                  {e.payoffs.map((p) => <tr key={p.debtId}><td><Link href={`/debts/${p.debtId}`}>{p.name}</Link></td><td className="r num">{usdWhole(p.costCents)}</td></tr>)}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {e.notCovered.length > 0 && (
+            <div className="msg" style={{ background: "var(--warn-soft)", color: "var(--warn)", marginTop: 12 }}>
+              The money does not reach {e.notCovered.map((p) => `${p.name} (${usdWhole(p.costCents)})`).join(" or ")}. Covering everything on your list would take about <b>{usdWhole(e.shortByCents)}</b> more.
+              Those debts stay on the books and keep their payments.
+            </div>
+          )}
+          {e.monthlyLeftBefore != null && e.monthlyLeftAfter != null && e.payoffs.length > 0 && (
             <p style={{ marginTop: 12 }}>
               The month after, with the income you are counting, the monthly picture goes from{" "}
               <b style={{ color: tone(e.monthlyLeftBefore) }}>{left(e.monthlyLeftBefore)}</b> to <b style={{ color: tone(e.monthlyLeftAfter) }}>{left(e.monthlyLeftAfter)}</b>
@@ -162,11 +175,10 @@ export default async function PlanPage({ searchParams }: { searchParams: Promise
             </p>
           )}
           <p className="note">
-            These use today&apos;s balances, less settlement payments scheduled before then. Interest, penalties and fees change the real payoff amounts, so ask each creditor for an exact figure in writing. Payoffs only count in the view that assumes everything goes well, because a debt is either paid off or it is not.
+            The plan pays debts off in the same order as the list further down (most serious first), as far as the money goes. These figures use today&apos;s balances, less settlement payments scheduled before then. Interest, penalties and fees change the real payoff amounts, so ask each creditor for an exact figure in writing.
           </p>
         </div>
       ))}
-
       {plan.outlook.length > 0 && (
         <div className="panel" id="outlook">
           <div className="head">
@@ -178,8 +190,13 @@ export default async function PlanPage({ searchParams }: { searchParams: Promise
             </div>
           </div>
           <p className="note" style={{ marginTop: 8 }}>
-            Starting cash {usdWhole(plan.cashOnHandCents ?? 0)}{plan.cashOnHandCents == null ? " (not entered, so counted as $0)" : ""}. Living costs stay the same. Debt payments change as settlements end{plan.view === "full" ? " and as expected payoffs happen" : ""}.
+            Starting cash {usdWhole(plan.cashOnHandCents ?? 0)}{plan.cashOnHandCents == null ? " (not entered, so counted as $0)" : ""}. Living costs stay the same. Debt payments change as settlements end{plan.view !== "steady" ? " and as a sale or other event pays debts off" : ""}.
           </p>
+          {plan.forecastEnding.length > 0 && (
+            <p className="note" style={{ color: "var(--warn)" }}>
+              {plan.forecastEnding.map((f) => `${f.name} ends before ${monthLabel(f.month)}`).join(". ")}. After that only paychecks are counted. <Link href="/expect">Add another forecast</Link> if you expect it to continue.
+            </p>
+          )}
           <div className="tablewrap">
             <table style={{ minWidth: 700 }}>
               <thead>
