@@ -201,7 +201,7 @@ export function nextSteps(i: StepInput): NextStep[] {
   }
 
   if (i.incomeCount === 0) steps.push({ id: "income", title: "Add your income", why: "The plan needs it to show what is left after your payments.", href: "/calendar" });
-  if (i.livingCostsCents == null) steps.push({ id: "living", title: "Enter your monthly living costs", why: "Rent, food, utilities and other basics. It shows what you really have left for debt.", href: "/plan#cash" });
+  if (i.livingCostsCents == null) steps.push({ id: "living", title: "Enter your monthly living costs", why: "Rent, food, utilities and other basics. It shows what you really have left for debt. You can list each cost separately.", href: "/living-costs" });
   if (i.taxPending > 0) steps.push({ id: "tax", title: `Review ${i.taxPending} settled ${i.taxPending === 1 ? "debt" : "debts"} for tax`, why: "Forgiven amounts can be taxable. Note what your tax professional says.", href: "/tax" });
   if (i.surplusCents != null && i.surplusCents > 0) {
     steps.push({ id: "extra", title: `See what ${usdWhole(i.surplusCents)} a month could do`, why: "That is what is left after living costs and scheduled payments. The simulator shows the effect on interest and time.", href: "/plan#simulator" });

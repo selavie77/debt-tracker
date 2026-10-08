@@ -6,10 +6,11 @@ import { Simulator } from "@/components/Simulator";
 import { todayISO } from "@/lib/dates";
 import { withUser } from "@/lib/db";
 import { planSettings } from "@/lib/db/schema";
+import { effectiveLivingCosts } from "@/lib/expenses";
 import { usdWhole } from "@/lib/money";
 import { buildPlan } from "@/lib/plan/build";
 import { DISCLAIMER, TIER_INFO } from "@/lib/plan/guidance";
-import { listDebts, listIncome, listNegotiations, listOffers, listTaxItems } from "@/lib/queries";
+import { listDebts, listExpenses, listIncome, listNegotiations, listOffers, listTaxItems } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
 
@@ -22,10 +23,12 @@ export default async function PlanPage() {
     offers: await listOffers(db),
     income: await listIncome(db),
     taxRows: await listTaxItems(db),
+    expenses: await listExpenses(db),
     settings: (await db.select().from(planSettings))[0] ?? null,
   }));
   const today = todayISO();
-  const plan = buildPlan({ ...data, livingCostsCents: data.settings?.livingCostsCents ?? null, today });
+  const living = effectiveLivingCosts(data.expenses, data.settings?.livingCostsCents ?? null);
+  const plan = buildPlan({ ...data, livingCostsCents: living.cents, today });
 
   if (plan.openCount === 0) {
     const none = data.debts.length === 0;
@@ -81,12 +84,24 @@ export default async function PlanPage() {
 
       <div className="panel" id="cash">
         <h2>Your monthly living costs</h2>
-        <p className="note">Food, utilities, transport and other basics, plus rent if it is not already one of your debts. It is used only to work out what is left for debt.</p>
-        <ActionForm action={saveLivingCosts} submitLabel="Save">
-          <label>Per month ($)
-            <input type="text" id="living" name="living" inputMode="decimal" defaultValue={plan.livingCostsCents == null ? "" : String(plan.livingCostsCents / 100)} placeholder="2,400" />
-          </label>
-        </ActionForm>
+        {living.source === "itemized" ? (
+          <p>
+            Using your itemized total of <b>{usdWhole(living.cents ?? 0)}</b> a month from {data.expenses.length} {data.expenses.length === 1 ? "cost" : "costs"}.{" "}
+            <Link href="/living-costs">See the breakdown</Link>
+          </p>
+        ) : (
+          <>
+            <p className="note">
+              Food, utilities, transport and other basics, plus rent if it is not already one of your debts. It is used only to work out what is left for debt.{" "}
+              <Link href="/living-costs">Or list each cost separately</Link> to see where the money goes.
+            </p>
+            <ActionForm action={saveLivingCosts} submitLabel="Save">
+              <label>Per month ($)
+                <input type="text" id="living" name="living" inputMode="decimal" defaultValue={living.cents == null ? "" : String(living.cents / 100)} placeholder="2,400" />
+              </label>
+            </ActionForm>
+          </>
+        )}
       </div>
 
       <div className="panel">

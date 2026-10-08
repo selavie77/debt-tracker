@@ -42,6 +42,9 @@ Test the job end to end with a throwaway user and a fake sender: `npx tsx script
 ## Plan
 `/plan` turns the data into a plain-language summary, next steps, an order to look at the debts (by how strongly a creditor can collect, then lateness, then interest), a payoff simulator (extra payments, avalanche or snowball, and a settlement what-if) and "did you know" notes. It is rule-based, so every sentence comes from fixed rules and the user's own numbers, and nothing is sent to an outside service. It lists facts, options to consider and questions to ask, and never tells anyone to stop paying or which option to pick. Code: `lib/plan/` (`simulate.ts`, `guidance.ts`, `build.ts`), all pure and tested. Preview on example data: `npx tsx scripts/plan-smoke-test.ts`.
 
+## Living costs
+`/living-costs` lets the user list each cost separately (Netflix, phone, gas, electricity) with a category and how often it is paid. `lib/expenses.ts` turns weekly, every-two-weeks, quarterly and yearly amounts into an average month and totals them by category. When any itemized costs exist their total is what the Plan uses; otherwise the single "living costs" number from `plan_settings` is used. Test on the real database with a throwaway user: `npx tsx scripts/expenses-smoke-test.ts`.
+
 ## Example data
 Example debts, entities and income carry `is_example = true`. Settings shows what will be removed and a confirm button; `lib/example-data.ts` deletes only those rows (and example entities with no remaining debt). Adding a real debt under an example entity turns that entity into a real one. Test: `npx tsx scripts/example-data-test.ts`.
 

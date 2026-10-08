@@ -18,5 +18,6 @@ export async function saveLivingCosts(_: FormState, fd: FormData): Promise<FormS
     db.insert(planSettings).values({ livingCostsCents: cents }).onConflictDoUpdate({ target: planSettings.ownerId, set: { livingCostsCents: cents } }),
   );
   revalidatePath("/plan");
+  revalidatePath("/living-costs");
   return { ok: cents == null ? "Cleared" : "Saved" };
 }

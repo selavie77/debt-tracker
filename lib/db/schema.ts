@@ -258,6 +258,39 @@ export const planSettings = pgTable(
   (t) => [ownerOnly("plan_settings", t)],
 ).enableRLS();
 
+export const EXPENSE_CATEGORIES = [
+  "housing",
+  "utilities",
+  "phone_internet",
+  "subscriptions",
+  "transportation",
+  "food",
+  "insurance",
+  "health",
+  "family",
+  "personal",
+] as const;
+export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
+
+export const EXPENSE_FREQUENCIES = ["monthly", "weekly", "biweekly", "quarterly", "yearly"] as const;
+export type ExpenseFrequency = (typeof EXPENSE_FREQUENCIES)[number];
+
+/** One living cost (Netflix, electricity, gas for the car...). The monthly equivalent is worked out from the frequency. */
+export const expenses = pgTable(
+  "expenses",
+  {
+    id: pk(),
+    ownerId: owner(),
+    name: text("name").notNull(),
+    category: text("category", { enum: EXPENSE_CATEGORIES }).notNull().default("personal"),
+    amountCents: integer("amount_cents").notNull(), // per payment, at the chosen frequency
+    frequency: text("frequency", { enum: EXPENSE_FREQUENCIES }).notNull().default("monthly"),
+    createdAt: created(),
+  },
+  (t) => [index("expenses_owner_idx").on(t.ownerId), ownerOnly("expenses", t)],
+).enableRLS();
+
+export type Expense = typeof expenses.$inferSelect;
 export type PlanSettings = typeof planSettings.$inferSelect;
 export type NotificationPrefs = typeof notificationPrefs.$inferSelect;
 export type TaxItem = typeof taxItems.$inferSelect;
