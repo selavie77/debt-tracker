@@ -1,7 +1,8 @@
 import { balanceAt, settlementSchedule, type DebtBundle } from "./finance";
 
 export type CalBundle = DebtBundle & { id: string; name: string };
-export type IncomeLike = { name: string; amountCents: number; dayOfMonth: number };
+/** Variable (business) income has no pay day, so it is not placed on the calendar. */
+export type IncomeLike = { name: string; amountCents: number; dayOfMonth: number; kind?: "steady" | "variable" };
 export type CalEvent = {
   date: string;
   kind: "income" | "paid" | "due" | "late";
@@ -30,7 +31,7 @@ export function monthEvents(bundles: CalBundle[], income: IncomeLike[], month: s
   const lastDay = new Date(y, m, 0).getDate();
   const thisMonth = today.slice(0, 7);
 
-  for (const i of income) {
+  for (const i of income.filter((r) => r.kind !== "variable")) {
     events.push({ date: `${month}-${pad(Math.min(i.dayOfMonth, lastDay))}`, kind: "income", label: i.name, amountCents: i.amountCents });
   }
 

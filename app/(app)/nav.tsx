@@ -10,6 +10,7 @@ const ITEMS = [
   { href: "/negotiations", label: "Negotiations" },
   { href: "/calendar", label: "Calendar" },
   { href: "/living-costs", label: "Living costs" },
+  { href: "/expect", label: "What you expect" },
   { href: "/compare", label: "Compare" },
   { href: "/tax", label: "Tax review" },
   { href: "/reports", label: "Reports" },

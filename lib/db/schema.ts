@@ -194,6 +194,15 @@ export const income = pgTable(
     name: text("name").notNull(),
     amountCents: integer("amount_cents").notNull(),
     dayOfMonth: integer("day_of_month").notNull(), // 1-30, or 31 for the last day of the month
+    // "steady": a paycheck, same amount on a set day.
+    // "variable": business or side income that changes month to month. amountCents is the monthly take-home if things
+    // go well, confidencePercent says how much of it to count on, and startsOn/endsOn say which months it applies to.
+    kind: text("kind", { enum: ["steady", "variable"] }).notNull().default("steady"),
+    lowCents: integer("low_cents"), // no longer used: replaced by confidencePercent. Kept so no data is dropped.
+    entityId: uuid("entity_id").references(() => entities.id, { onDelete: "set null" }), // the business it comes from
+    confidencePercent: integer("confidence_percent"), // 1-100, variable income only
+    startsOn: date("starts_on", { mode: "string" }),
+    endsOn: date("ends_on", { mode: "string" }), // null = no end
     isExample: boolean("is_example").notNull().default(false),
     createdAt: created(),
   },
@@ -255,10 +264,46 @@ export const planSettings = pgTable(
     id: pk(),
     ownerId: owner().unique(),
     livingCostsCents: integer("living_costs_cents"), // rent, food, utilities: what is needed before any debt payment
+    cashOnHandCents: integer("cash_on_hand_cents"), // cash and savings available today, the starting point for the outlook
     createdAt: created(),
   },
   (t) => [ownerOnly("plan_settings", t)],
 ).enableRLS();
+
+/** One-time money the user expects to arrive or leave: selling a property, a tax refund, a large bill. */
+export const plannedEvents = pgTable(
+  "planned_events",
+  {
+    id: pk(),
+    ownerId: owner(),
+    name: text("name").notNull(),
+    direction: text("direction", { enum: ["in", "out"] }).notNull().default("in"),
+    amountCents: integer("amount_cents").notNull(), // always positive; direction says which way it goes
+    expectedMonth: date("expected_month", { mode: "string" }).notNull(), // first day of the month it is expected
+    confidencePercent: integer("confidence_percent").notNull().default(100), // 1-100, how much to count on it
+    note: text("note").notNull().default(""),
+    createdAt: created(),
+  },
+  (t) => [index("planned_events_owner_idx").on(t.ownerId), ownerOnly("planned_events", t)],
+).enableRLS();
+
+/** Debts an expected event is meant to pay off (for example the back taxes and the auto loan, from a property sale). */
+export const plannedEventDebts = pgTable(
+  "planned_event_debts",
+  {
+    id: pk(),
+    ownerId: owner(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => plannedEvents.id, { onDelete: "cascade" }),
+    debtId: uuid("debt_id")
+      .notNull()
+      .references(() => debts.id, { onDelete: "cascade" }),
+  },
+  (t) => [unique("planned_event_debts_unique").on(t.eventId, t.debtId), index("planned_event_debts_owner_idx").on(t.ownerId), ownerOnly("planned_event_debts", t)],
+).enableRLS();
+
+export type PlannedEvent = typeof plannedEvents.$inferSelect;
 
 export const EXPENSE_CATEGORIES = [
   "housing",

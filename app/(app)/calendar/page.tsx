@@ -18,6 +18,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const month = m && /^\d{4}-(0[1-9]|1[0-2])$/.test(m) ? m : today.slice(0, 7);
   const [debts, incomeRows] = await withUser((db) => Promise.all([listDebts(db), listIncome(db)]));
 
+  const paychecks = incomeRows.filter((r) => r.kind !== "variable");
   const events = monthEvents(debts.map((d) => ({ ...d, id: d.debt.id, name: d.debt.name })), incomeRows, month, today);
   const totals = monthTotals(events);
   const [y, mo] = month.split("-").map(Number);
@@ -39,7 +40,17 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       </PageHead>
 
       <div className="grid g4">
-        <Kpi label="Income" value={usdWhole(totals.income)} sub={incomeRows.length ? `${incomeRows.length} deposit${incomeRows.length > 1 ? "s" : ""} a month` : "none entered yet"} />
+        <Kpi
+          label="Income"
+          value={usdWhole(totals.income)}
+          sub={
+            incomeRows.some((r) => r.kind === "variable")
+              ? `paychecks only. Business income is on the Plan page`
+              : incomeRows.length
+                ? `${incomeRows.length} deposit${incomeRows.length > 1 ? "s" : ""} a month`
+                : "none entered yet"
+          }
+        />
         <Kpi label="Debt payments" value={usdWhole(totals.paid + totals.toPay)} sub={`${usdWhole(totals.paid)} paid, ${usdWhole(totals.toPay)} to pay`} />
         <Kpi label="Left after payments" value={usdWhole(totals.leftAfter)} sub={totals.leftAfter >= 0 ? "before living costs" : "shortfall this month"} hero={totals.leftAfter >= 0 && totals.income > 0} />
         <Kpi label="Overdue" value={usdWhole(events.filter((e) => e.kind === "late").reduce((s, e) => s + e.amountCents, 0))} sub="scheduled before today, not logged" />
@@ -94,8 +105,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         <div className="panel">
           <h2>Income</h2>
           <div className="list">
-            {incomeRows.length === 0 && <p className="note">Add what you expect to receive, such as a paycheck on the 15th and the last day of the month, to see what is left after debt payments.</p>}
-            {incomeRows.map((r) => (
+            {paychecks.length === 0 && <p className="note">Add what you receive, such as a paycheck on the 15th and the last day of the month, to see what is left after debt payments. Income from a business goes under <Link href="/expect">What you expect</Link>.</p>}
+            {paychecks.map((r) => (
               <div className="item" key={r.id}>
                 <div>{r.name}<span className="sub2">on {dayOfMonthLabel(r.dayOfMonth)} each month</span></div>
                 <div className="actions">
@@ -105,7 +116,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               </div>
             ))}
           </div>
-          <h2 style={{ marginTop: 16 }}>Add income</h2>
+          {incomeRows.some((r) => r.kind === "variable") && (
+            <p className="note">
+              Business income is not shown here because it has no pay day. It is counted on the Plan page, with your confidence level. <Link href="/expect">See or change it</Link>
+            </p>
+          )}          <h2 style={{ marginTop: 16 }}>Add a paycheck</h2>
           <IncomeForm />
         </div>
       </div>

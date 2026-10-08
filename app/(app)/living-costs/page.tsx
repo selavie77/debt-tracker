@@ -4,10 +4,12 @@ import { ActionForm } from "@/components/ActionForm";
 import { Kpi, PageHead } from "@/components/Bits";
 import { ExpenseForm } from "@/components/ExpenseForm";
 import { ActionButton } from "@/components/TestEmailButton";
+import { todayISO } from "@/lib/dates";
 import { withUser } from "@/lib/db";
 import { planSettings } from "@/lib/db/schema";
 import { CATEGORY_LABEL, FREQUENCY_LABEL, byCategory, effectiveLivingCosts, monthlyCents } from "@/lib/expenses";
 import { usd, usdWhole } from "@/lib/money";
+import { defaultView, incomeForView, incomeScenarios } from "@/lib/plan/income";
 import { listExpenses, listIncome } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
@@ -20,7 +22,9 @@ export default async function LivingCostsPage() {
   }));
   const single = settings?.livingCostsCents ?? null;
   const living = effectiveLivingCosts(items, single);
-  const monthlyIncome = income.length ? income.reduce((s, i) => s + i.amountCents, 0) : null;
+  // Paychecks plus any business income at your confidence, the same careful level the plan starts with.
+  const scenarios = incomeScenarios(income, todayISO().slice(0, 7));
+  const monthlyIncome = income.length ? incomeForView(scenarios, defaultView(scenarios)) : null;
   const cats = byCategory(items);
   const sorted = [...items].sort((a, b) => monthlyCents(b.amountCents, b.frequency) - monthlyCents(a.amountCents, a.frequency));
   const top = cats[0];

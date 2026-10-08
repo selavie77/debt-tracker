@@ -155,10 +155,13 @@ export async function saveTaxItem(debtId: string, _: FormState, fd: FormData): P
  * Day 31 means the last day of the month.
  */
 export async function addIncome(_: FormState, fd: FormData): Promise<FormState> {
-  const parsed = parseIncome({ name: str(fd, "name"), amount: str(fd, "amount"), schedule: str(fd, "schedule"), day: str(fd, "day"), day2: str(fd, "day2") });
+  const parsed = parseIncome({
+    name: str(fd, "name"), amount: str(fd, "amount"), schedule: str(fd, "schedule"), day: str(fd, "day"), day2: str(fd, "day2"), kind: "steady",
+  });
   if ("error" in parsed) return { error: parsed.error };
   await withUser((db) => db.insert(income).values(parsed.rows));
   refresh();
+  revalidatePath("/plan");
   const name = parsed.rows[0].name;
   return { ok: parsed.rows.length === 2 ? `Added ${name} twice a month` : `Added ${name}` };
 }

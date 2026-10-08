@@ -5,6 +5,7 @@ import { rateLabel, usdWhole } from "../money";
 import { STAGE_LABEL, isTimeSensitive, type Reminder } from "../negotiation";
 import type { DebtFull } from "../queries";
 import { FORM_THRESHOLD_CENTS } from "../tax";
+import type { IncomeView } from "./income";
 
 // Rule-based guidance. Every sentence is built from fixed rules and the user's own numbers, so it can be tested
 // and nothing is sent to an outside service. It lists facts, options to consider and questions to ask.
@@ -111,13 +112,39 @@ export function priorities(debts: DebtFull[], stageByDebt: Map<string, Stage>, t
 
 export type Fact = { id: string; title: string; text: string; about: string[] };
 
-export function didYouKnow(debts: DebtFull[], today = todayISO()): Fact[] {
+export function didYouKnow(debts: DebtFull[], today = todayISO(), opts: { businessIncomeNames?: string[]; payoffEvents?: { name: string; hasTaxDebt: boolean }[] } = {}): Fact[] {
   const open = debts.filter(isOpen);
   const names = (list: DebtFull[]) => list.map((d) => d.debt.name);
   const out: Fact[] = [];
   const add = (id: string, title: string, text: string, list: DebtFull[]) => {
     if (list.length) out.push({ id, title, text, about: names(list) });
   };
+
+  if (opts.payoffEvents?.length) {
+    out.push({
+      id: "proceeds",
+      title: "Sale proceeds can have taxes and costs",
+      text: "If the money comes from selling something, closing costs and any tax on the gain come out of it. Use the amount you expect to actually receive. A tax professional can estimate any tax on the gain.",
+      about: opts.payoffEvents.map((e) => e.name),
+    });
+    const withTax = opts.payoffEvents.filter((e) => e.hasTaxDebt);
+    if (withTax.length) {
+      out.push({
+        id: "lien",
+        title: "Back taxes can come out of a sale at closing",
+        text: "A federal or state tax lien can attach to property you own, and an unpaid balance may have to be paid from the proceeds at closing. Ask the title or escrow company early for a payoff figure, and get written payoff letters from each creditor so nothing changes at the last minute.",
+        about: withTax.map((e) => e.name),
+      });
+    }
+  }
+  if (opts.businessIncomeNames?.length) {
+    out.push({
+      id: "selfemployed",
+      title: "Business income is usually taxable",
+      text: "Money from a side business is usually taxable income. Self-employed people generally owe self-employment tax on top of income tax, and make quarterly estimated payments when they expect to owe $1,000 or more. Setting aside a share of each month's earnings can keep a new tax bill from building up. A tax professional can tell you how much.",
+      about: opts.businessIncomeNames,
+    });
+  }
 
   add("irs", "Back taxes have their own payment options",
     "The IRS offers payment plans and, in some cases, an Offer in Compromise to settle for less than the full amount. Penalties and interest keep adding up until the balance is paid. A tax professional can tell you what you may qualify for.",
@@ -170,6 +197,13 @@ export type StepInput = {
   livingCostsCents: number | null;
   surplusCents: number | null;
   taxPending: number;
+  /** What the business must bring in monthly to break even, when income varies. */
+  breakEvenCents?: number | null;
+  /** First month cash goes below zero in the chosen view. */
+  runsOutMonth?: string | null;
+  view?: IncomeView;
+  /** Expected events that will pay off debts. */
+  payoffEvents?: { name: string; month: string; debtNames: string[] }[];
   today?: string;
 };
 
@@ -218,8 +252,30 @@ export function nextSteps(i: StepInput): NextStep[] {
   if (i.surplusCents != null && i.surplusCents > 0) {
     steps.push({ id: "extra", title: `See what ${usdWhole(i.surplusCents)} a month could do`, why: "That is what is left after living costs and scheduled payments. The simulator shows the effect on interest and time.", href: "/plan#simulator" });
   }
+  if (i.runsOutMonth && i.view !== "full") {
+    steps.push({
+      id: "runs-out",
+      title: `At this pace your cash runs out in ${monthLabel(i.runsOutMonth)}`,
+      why: "Living costs and debt payments are higher than the income and one-time money you are counting. The outlook below shows it month by month.",
+      href: "/plan#outlook",
+    });
+  }
+  for (const e of i.payoffEvents ?? []) {
+    steps.push({
+      id: `payoff-${e.name}`,
+      title: `Ask for exact payoff amounts: ${listNames(e.debtNames)}`,
+      why: `${e.name} is expected in ${monthLabel(e.month)}. Interest and fees change the figure, and the exact amount in writing is what is needed at closing.`,
+      href: "/debts",
+    });
+  }
   if (i.surplusCents != null && i.surplusCents < 0) {
-    steps.push({ id: "short", title: "Your payments are higher than what you have left", why: `You are short by about ${usdWhole(-i.surplusCents)} a month. Ask creditors about lower payments, or look at the payment plan options.`, href: "/plan#cash" });
+    const gap = i.breakEvenCents && i.breakEvenCents > 0 ? ` With paychecks alone, the business would need to bring in about ${usdWhole(i.breakEvenCents)} a month to cover living costs and scheduled payments.` : "";
+    steps.push({
+      id: "short",
+      title: "Your payments are higher than what you have left",
+      why: `You are short by about ${usdWhole(-i.surplusCents)} a month in this view.${gap} Ask creditors about lower payments, or look at the payment plan options.`,
+      href: "/plan#cash",
+    });
   }
   return steps.slice(0, 6);
 }
@@ -238,7 +294,30 @@ export type StoryInput = {
   lateCount: number;
   urgentCount: number;
   extra: { extraCents: number; targetName: string; monthsSaved: number; interestSavedCents: number } | null;
+  /** Only when some income varies (a side business forecast). */
+  scenario?: {
+    view: IncomeView;
+    expectedCents: number; // the business this month at your confidence
+    fullCents: number; // the business this month if it all goes well
+    steadySurplus: number | null;
+    expectedSurplus: number | null;
+    fullSurplus: number | null;
+    breakEvenCents: number | null;
+  };
+  /** The month-by-month cash picture, when living costs are known. */
+  outlook?: { months: number; runsOutMonth: string | null; cashStartCents: number; view: IncomeView };
+  /** Expected one-time events that pay off debts. */
+  events?: { name: string; month: string; amountCents: number; payoffNames: string[]; payoffTotalCents: number; proceedsAfterCents: number; monthlyFreedCents: number }[];
 };
+
+/** "March 2027" from "2027-03". */
+export function monthLabel(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+const listNames = (names: string[]) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`);
+const leaves = (n: number) => (n >= 0 ? `leave about ${usdWhole(n)} a month` : `leave you short by about ${usdWhole(-n)} a month`);
 
 export function buildStory(s: StoryInput): string[] {
   const out: string[] = [];
@@ -257,7 +336,34 @@ export function buildStory(s: StoryInput): string[] {
   } else {
     out.push(`Your scheduled debt payments come to ${usdWhole(s.monthlyObligationCents)} a month. Add your income on the Calendar page to see how that compares.`);
   }
-  if (s.costliest) out.push(`The costliest debt to carry is ${s.costliest.name}, at ${rateLabel(s.costliest.rateBps)}: about ${usdWhole(s.costliest.interestPerYearCents)} a year in interest.`);
+  if (s.scenario) {
+    const c = s.scenario;
+    const counted =
+      c.view === "steady" ? "only your paychecks, not the business"
+      : c.view === "expected" ? `the business at your confidence (${usdWhole(c.expectedCents)} of ${usdWhole(c.fullCents)} a month)`
+      : `the business at its full amount (${usdWhole(c.fullCents)} a month)`;
+    out.push(`Business income is not certain, so this plan counts ${counted}.`);
+    if (c.steadySurplus != null && c.expectedSurplus != null && c.fullSurplus != null) {
+      const need = c.breakEvenCents && c.breakEvenCents > 0
+        ? `With paychecks alone you would be short by about ${usdWhole(-c.steadySurplus)} a month, so the business has to bring in about ${usdWhole(c.breakEvenCents)} a month to break even. `
+        : "Your paychecks alone cover your living costs and scheduled payments. ";
+      out.push(`${need}Counting the business at your confidence would ${leaves(c.expectedSurplus)}, and at its full amount would ${leaves(c.fullSurplus)}.`);
+    }
+  }
+  if (s.outlook) {
+    const o = s.outlook;
+    if (o.runsOutMonth) {
+      out.push(`At this pace your cash runs out in ${monthLabel(o.runsOutMonth)}${o.cashStartCents === 0 ? " (starting from $0 in cash, so enter what you have on the Plan page)" : ""}.`);
+    } else {
+      out.push(`In this view your cash stays above zero for the next ${o.months} months.`);
+    }
+  }
+  for (const e of s.events ?? []) {
+    out.push(
+      `If ${e.name} comes through in ${monthLabel(e.month)} (${usdWhole(e.amountCents)}), it would pay off ${listNames(e.payoffNames)} for about ${usdWhole(e.payoffTotalCents)}, ` +
+        `leave about ${usdWhole(Math.max(0, e.proceedsAfterCents))}${e.proceedsAfterCents < 0 ? " (it falls short of the payoffs)" : ""}, and stop about ${usdWhole(e.monthlyFreedCents)} a month in payments.`,
+    );
+  }  if (s.costliest) out.push(`The costliest debt to carry is ${s.costliest.name}, at ${rateLabel(s.costliest.rateBps)}: about ${usdWhole(s.costliest.interestPerYearCents)} a year in interest.`);
   if (s.lateCount > 0 || s.urgentCount > 0) {
     const parts = [];
     if (s.lateCount > 0) parts.push(`${s.lateCount} ${s.lateCount === 1 ? "debt is" : "debts are"} late`);

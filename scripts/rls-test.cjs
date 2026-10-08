@@ -38,13 +38,15 @@ const check = (name, ok) => { console.log(ok ? "PASS" : "FAIL", name); if (!ok) 
     await c.query("insert into notification_prefs (email_reminders) values (true)");
     await c.query("insert into plan_settings (living_costs_cents) values (240000)");
     await c.query("insert into expenses (name, category, amount_cents, frequency) values ('Netflix','subscriptions',1599,'monthly')");
+    const ev = await c.query("insert into planned_events (name, direction, amount_cents, expected_month, confidence_percent) values ('Sale','in',15000000,'2027-03-01',60) returning id");
+    await c.query("insert into planned_event_debts (event_id, debt_id) values ($1,$2)", [ev.rows[0].id, d.rows[0].id]);
     await c.query("insert into reminder_sent (key, sent_on) values ('x:y:z:7','2026-01-01')");
 
     await as(B);
     check("user B sees no entities of A", (await c.query("select 1 from entities")).rowCount === 0);
     check("user B sees no debts of A", (await c.query("select 1 from debts")).rowCount === 0);
     check("user B sees no payments of A", (await c.query("select 1 from payments")).rowCount === 0);
-    for (const t of ["negotiations", "offers", "contacts", "income", "tax_items", "notification_prefs", "reminder_sent", "plan_settings", "expenses"]) {
+    for (const t of ["negotiations", "offers", "contacts", "income", "tax_items", "notification_prefs", "reminder_sent", "plan_settings", "expenses", "planned_events", "planned_event_debts"]) {
       check(`user B sees no ${t} of A`, (await c.query(`select 1 from ${t}`)).rowCount === 0);
       check(`user B cannot delete A's ${t}`, (await c.query(`delete from ${t}`)).rowCount === 0);
     }

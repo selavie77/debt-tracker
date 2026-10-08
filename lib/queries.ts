@@ -1,7 +1,7 @@
 import { asc, desc, eq } from "drizzle-orm";
 import type { Db } from "./db";
 import {
-  contacts, debts, entities, expenses, income, negotiations, offers, payments, settlements, taxItems,
+  contacts, debts, entities, expenses, income, negotiations, offers, payments, plannedEventDebts, plannedEvents, planSettings, settlements, taxItems,
   type Debt, type Entity, type Expense, type Income, type Negotiation, type Offer, type Payment, type Settlement, type TaxItem,
 } from "./db/schema";
 import { balanceAt, eliminated, totalPaid, type DebtBundle } from "./finance";
@@ -74,6 +74,18 @@ export async function listExpenses(db: Db): Promise<Expense[]> {
   return db.select().from(expenses).orderBy(asc(expenses.createdAt));
 }
 
+/** Expected one-time events, each with the ids of the debts it is meant to pay off. */
+export async function listEvents(db: Db) {
+  const [events, links] = await Promise.all([
+    db.select().from(plannedEvents).orderBy(asc(plannedEvents.expectedMonth)),
+    db.select().from(plannedEventDebts),
+  ]);
+  return events.map((e) => ({
+    id: e.id, name: e.name, direction: e.direction, amountCents: e.amountCents, expectedMonth: e.expectedMonth,
+    confidencePercent: e.confidencePercent, note: e.note, payoffDebtIds: links.filter((l) => l.eventId === e.id).map((l) => l.debtId),
+  }));
+}
+
 export async function listTaxItems(db: Db): Promise<TaxItem[]> {
   return db.select().from(taxItems);
 }
@@ -96,4 +108,13 @@ export async function getDebt(db: Db, id: string): Promise<DebtFull | null> {
     db.select().from(payments).where(eq(payments.debtId, id)),
   ]);
   return build(e, d, s ?? null, ps);
+}
+
+/** Everything the plan is built from, loaded in one go. */
+export async function loadPlanData(db: Db) {
+  const [debtRows, negs, offerRows, incomeRows, taxRows, events, entityRows, expenseRows, settingsRows] = await Promise.all([
+    listDebts(db), listNegotiations(db), listOffers(db), listIncome(db), listTaxItems(db), listEvents(db), listEntities(db), listExpenses(db),
+    db.select().from(planSettings),
+  ]);
+  return { debts: debtRows, negs, offers: offerRows, income: incomeRows, taxRows, events, entities: entityRows, expenses: expenseRows, settings: settingsRows[0] ?? null };
 }

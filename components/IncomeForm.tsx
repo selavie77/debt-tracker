@@ -15,11 +15,11 @@ function DayOptions() {
   );
 }
 
-/** Income form: once a month, or twice a month (defaults to the 15th and the last day). */
+/** Paycheck form: once a month, or twice a month (defaults to the 15th and the last day). Business income is on the Expect page. */
 export function IncomeForm() {
   const [schedule, setSchedule] = useState<"monthly" | "twice">("twice");
   return (
-    <ActionForm action={addIncome} submitLabel="Add income" resetOnSuccess>
+    <ActionForm action={addIncome} submitLabel="Add paycheck" resetOnSuccess>
       <label>Name<input type="text" id="income-name" name="name" placeholder="Paycheck" required /></label>
       <label>{schedule === "twice" ? "Amount per paycheck ($)" : "Amount ($)"}<input type="text" id="income-amount" inputMode="decimal" name="amount" required /></label>
       <label>How often

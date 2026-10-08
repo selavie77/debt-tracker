@@ -27,7 +27,7 @@ const TODAY = "2026-10-26";
         living: (await db.select().from(planSettings))[0].livingCostsCents,
       };
     });
-    const plan = buildPlan({ ...data, livingCostsCents: data.living, today: TODAY });
+    const plan = buildPlan({ ...data, livingCostsCents: data.living, today: TODAY, events: [], entities: [], cashOnHandCents: null });
 
     console.log("== STORY");
     plan.story.forEach((p) => console.log("  " + p));

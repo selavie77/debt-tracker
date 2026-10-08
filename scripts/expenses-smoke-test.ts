@@ -35,7 +35,7 @@ const check = (name: string, ok: boolean, extra = "") => {
     let d = await load();
     let living = effectiveLivingCosts(d.expenses, d.single);
     check("with no itemized costs the single total is used", living.source === "single" && living.cents === 100_000);
-    const before = buildPlan({ ...d, livingCostsCents: living.cents, today: "2026-10-26" });
+    const before = buildPlan({ ...d, livingCostsCents: living.cents, today: "2026-10-26", events: [], entities: [], cashOnHandCents: null });
 
     const rows = [
       { name: "Rent", category: "housing", amount: "1400", frequency: "monthly" },
@@ -53,7 +53,7 @@ const check = (name: string, ok: boolean, extra = "") => {
     check("itemized costs replace the single total", living.source === "itemized" && living.cents === expected, `$${(living.cents ?? 0) / 100} a month`);
     const cats = byCategory(d.expenses);
     check("biggest category is housing", cats[0].category === "housing");
-    const after = buildPlan({ ...d, livingCostsCents: living.cents, today: "2026-10-26" });
+    const after = buildPlan({ ...d, livingCostsCents: living.cents, today: "2026-10-26", events: [], entities: [], cashOnHandCents: null });
     check("the plan's left-over changes by the difference", (before.surplusCents ?? 0) - (after.surplusCents ?? 0) === expected - 100_000, `${before.surplusCents} -> ${after.surplusCents}`);
 
     await runAsUser(U, (db) => db.delete(expenses));
