@@ -36,13 +36,14 @@ const check = (name, ok) => { console.log(ok ? "PASS" : "FAIL", name); if (!ok) 
     await c.query("insert into income (name, amount_cents, day_of_month) values ('Salary',210000,1)");
     await c.query("insert into tax_items (debt_id, note) values ($1,'secret')", [d.rows[0].id]);
     await c.query("insert into notification_prefs (email_reminders) values (true)");
+    await c.query("insert into plan_settings (living_costs_cents) values (240000)");
     await c.query("insert into reminder_sent (key, sent_on) values ('x:y:z:7','2026-01-01')");
 
     await as(B);
     check("user B sees no entities of A", (await c.query("select 1 from entities")).rowCount === 0);
     check("user B sees no debts of A", (await c.query("select 1 from debts")).rowCount === 0);
     check("user B sees no payments of A", (await c.query("select 1 from payments")).rowCount === 0);
-    for (const t of ["negotiations", "offers", "contacts", "income", "tax_items", "notification_prefs", "reminder_sent"]) {
+    for (const t of ["negotiations", "offers", "contacts", "income", "tax_items", "notification_prefs", "reminder_sent", "plan_settings"]) {
       check(`user B sees no ${t} of A`, (await c.query(`select 1 from ${t}`)).rowCount === 0);
       check(`user B cannot delete A's ${t}`, (await c.query(`delete from ${t}`)).rowCount === 0);
     }

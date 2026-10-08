@@ -245,6 +245,20 @@ export const reminderSent = pgTable(
   (t) => [unique("reminder_sent_owner_key").on(t.ownerId, t.key), ownerOnly("reminder_sent", t)],
 ).enableRLS();
 
+// ---- Plan ----
+
+export const planSettings = pgTable(
+  "plan_settings",
+  {
+    id: pk(),
+    ownerId: owner().unique(),
+    livingCostsCents: integer("living_costs_cents"), // rent, food, utilities: what is needed before any debt payment
+    createdAt: created(),
+  },
+  (t) => [ownerOnly("plan_settings", t)],
+).enableRLS();
+
+export type PlanSettings = typeof planSettings.$inferSelect;
 export type NotificationPrefs = typeof notificationPrefs.$inferSelect;
 export type TaxItem = typeof taxItems.$inferSelect;
 export type Negotiation = typeof negotiations.$inferSelect;

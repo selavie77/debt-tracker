@@ -39,6 +39,9 @@ Environment variables on Vercel (never commit them):
 
 Test the job end to end with a throwaway user and a fake sender: `npx tsx scripts/reminders-job-test.ts`.
 
+## Plan
+`/plan` turns the data into a plain-language summary, next steps, an order to look at the debts (by how strongly a creditor can collect, then lateness, then interest), a payoff simulator (extra payments, avalanche or snowball, and a settlement what-if) and "did you know" notes. It is rule-based, so every sentence comes from fixed rules and the user's own numbers, and nothing is sent to an outside service. It lists facts, options to consider and questions to ask, and never tells anyone to stop paying or which option to pick. Code: `lib/plan/` (`simulate.ts`, `guidance.ts`, `build.ts`), all pure and tested. Preview on example data: `npx tsx scripts/plan-smoke-test.ts`.
+
 ## Example data
 Example debts, entities and income carry `is_example = true`. Settings shows what will be removed and a confirm button; `lib/example-data.ts` deletes only those rows (and example entities with no remaining debt). Adding a real debt under an example entity turns that entity into a real one. Test: `npx tsx scripts/example-data-test.ts`.
 
